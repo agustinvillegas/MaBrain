@@ -268,8 +268,27 @@ class TestRelation(unittest.TestCase):
         brain.learn("perro corre", relations=["ACTION"])
         candidates = brain.analogy("perro", "ladra", "gato")
         self.assertGreater(len(candidates), 0)
-        best = candidates[0][0]
+        best = candidates[0]["d"]
         self.assertEqual(best, "maulla")
+        self.assertIn("trace", candidates[0])
+        self.assertIn("score", candidates[0])
+        self.assertIn("relation", candidates[0])
+
+    def test_analogy_multi_relation(self):
+        brain = Brain()
+        brain.learn("perro ladra", relations=["SOUND_OF"])
+        brain.learn("gato maulla", relations=["SOUND_OF"])
+        brain.learn("gato ronronea", relations=["SOUND_OF"])
+        candidates = brain.analogy("perro", "ladra", "gato")
+        self.assertGreaterEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["d"], "maulla")
+
+    def test_analogy_no_match(self):
+        brain = Brain()
+        brain.learn("perro ladra", relations=["SOUND_OF"])
+        brain.learn("gato come", relations=["ACTION"])
+        candidates = brain.analogy("perro", "ladra", "gato")
+        self.assertEqual(len(candidates), 0)
 
 
 class TestPrune(unittest.TestCase):

@@ -282,15 +282,48 @@ class Brain:
         return sorted(results, key=lambda x: (x[2], -x[1]))
 
 
-    def analogy(self, a, b, c):
+    def analogy(self, a, b, c, top_k=5):
 
-        relation = self.query_relation(a, b)
-        if not relation:
-            return []
+        results = []
 
-        candidates = self.find_by_relation(c, relation)
+        cell_a_id = self.concept_registry.get(a)
+        cell_b_id = self.concept_registry.get(b)
+        cell_c_id = self.concept_registry.get(c)
 
-        return candidates
+        if not cell_a_id or not cell_b_id or not cell_c_id:
+            return results
+
+        cell_a = self.cells[cell_a_id]
+        cell_c = self.cells[cell_c_id]
+
+        relations_ab = set()
+
+        for syn in cell_a.synapses_out:
+            if syn.target.id == cell_b_id:
+                relations_ab.add(syn.relation)
+
+        for relation in relations_ab:
+
+            for csyn in cell_c.synapses_out:
+                if csyn.relation != relation:
+                    continue
+                if not csyn.target.word:
+                    continue
+                score = csyn.strength / max(csyn.cost, 0.001)
+                results.append({
+                    "d": csyn.target.word,
+                    "relation": relation,
+                    "score": score,
+                    "strength": csyn.strength,
+                    "cost": csyn.cost,
+                    "trace": {
+                        "a_b": {"from": a, "to": b, "relation": relation},
+                        "c_d": {"from": c, "to": csyn.target.word, "relation": relation}
+                    }
+                })
+
+        results.sort(key=lambda x: (-x["score"], x["cost"]))
+        return results[:top_k]
 
 
     def prune(self, min_usage=1):
