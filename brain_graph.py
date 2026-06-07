@@ -13,11 +13,12 @@ def save_brain(brain: Brain, filename="brain_dump.txt"):
 
         f.write("\n========== NEURONAS ==========\n\n")
 
-        for label, cell in brain.cells.items():
+        for cell_id, cell in brain.cells.items():
+            label = cell.word or cell.id[:8]
             f.write(
-                f"[NEURONA {cell.id}] {label}\n"
+                f"[NEURONA {cell_id[:8]}] {label}\n"
                 f"  energia: {cell.energy:.3f}\n"
-                f"  activa: {cell.active}\n"
+                f"  activacion: {cell.activation:.3f}\n"
                 f"  conexiones salida: {len(cell.synapses_out)}\n\n"
             )
 
@@ -26,9 +27,13 @@ def save_brain(brain: Brain, filename="brain_dump.txt"):
 
         for syn_id, syn in brain.synapses.items():
 
+            origin_label = syn.origin.word or syn.origin.id[:8]
+            target_label = syn.target.word or syn.target.id[:8]
+
             f.write(
-                f"[SINAPSIS {syn_id}]\n"
-                f"  {syn.origin.label} ---> {syn.target.label}\n"
+                f"[SINAPSIS {syn_id[:8]}]\n"
+                f"  {origin_label} ---> {target_label}\n"
+                f"  concepto: {syn.concept}\n"
                 f"  fuerza: {syn.strength:.3f}\n"
                 f"  costo: {syn.cost:.3f}\n"
                 f"  uso: {syn.usage}\n"
