@@ -1,12 +1,14 @@
 import json
+import math
 import random
 import uuid
 
 
 class Braincell:
 
-    def __init__(self, cell_id=None):
+    def __init__(self, cell_id=None, word=None):
         self.id = cell_id or str(uuid.uuid4())
+        self.word = word
 
         self.energy = 0.0
         self.activation = 0.0
@@ -54,6 +56,7 @@ class Brain:
 
         self.cells = {}
         self.synapses = {}
+        self.concept_registry = {}
 
         self.thoughts = []
 
@@ -63,6 +66,19 @@ class Brain:
         cell = Braincell()
 
         self.cells[cell.id] = cell
+
+        return cell
+
+
+    def get_or_create_cell(self, concept):
+
+        if concept in self.concept_registry:
+            cell_id = self.concept_registry[concept]
+            return self.cells[cell_id]
+
+        cell = Braincell(word=concept)
+        self.cells[cell.id] = cell
+        self.concept_registry[concept] = cell.id
 
         return cell
 
@@ -135,8 +151,7 @@ class Brain:
 
         for word in words:
 
-            # neurona temporal de procesamiento
-            cell = self.create_cell()
+            cell = self.get_or_create_cell(word)
 
 
             if previous:
@@ -152,7 +167,32 @@ class Brain:
 
 
 
-    def think(self, start_cell, steps=10):
+    def _select_synapse(self, options, temperature=1.0, epsilon=0.0):
+
+        if temperature <= 0:
+            return min(options, key=lambda x: x.efficiency())
+
+        if random.random() < epsilon:
+            return random.choice(options)
+
+        efficiencies = [s.efficiency() for s in options]
+        max_eff = max(efficiencies)
+        weights = [math.exp(-(e - max_eff) / temperature) for e in efficiencies]
+
+        total = sum(weights)
+        if total <= 0:
+            return random.choice(options)
+
+        r = random.random() * total
+        cumulative = 0
+        for i, w in enumerate(weights):
+            cumulative += w
+            if r <= cumulative:
+                return options[i]
+        return options[-1]
+
+
+    def think(self, start_cell, steps=10, temperature=1.0, epsilon=0.0):
 
         current = start_cell
 
@@ -168,20 +208,20 @@ class Brain:
             options = current.synapses_out
 
 
-            # economía energética
-            best = min(
+            choice = self._select_synapse(
                 options,
-                key=lambda x:x.efficiency()
+                temperature=temperature,
+                epsilon=epsilon
             )
 
 
-            result.append(best.concept)
+            result.append(choice.concept)
 
-            best.usage += 1
-            best.activation_trace += best.strength
-            best.target.activation += best.strength
-            best.target.thought_trace += best.strength
-            current = best.target
+            choice.usage += 1
+            choice.activation_trace += choice.strength
+            choice.target.activation += choice.strength
+            choice.target.thought_trace += choice.strength
+            current = choice.target
 
         thought = " ".join(result)
 
@@ -209,6 +249,7 @@ class Brain:
 
             data["cells"][cid]={
 
+                "word": c.word,
                 "energy":c.energy,
                 "activation":c.activation
 
@@ -261,12 +302,15 @@ class Brain:
 
         for cid,c in data["cells"].items():
 
-            cell=Braincell(cid)
+            cell=Braincell(cid, word=c.get("word"))
 
             cell.energy=c["energy"]
             cell.activation=c["activation"]
 
             self.cells[cid]=cell
+
+            if cell.word:
+                self.concept_registry[cell.word] = cid
 
 
 

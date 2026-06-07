@@ -11,9 +11,7 @@ def train_sequence(sequence):
 
     for concept in sequence:
 
-        # crea una neurona que procesa estado,
-        # no representa el concepto
-        current_neuron = brain.create_cell()
+        current_neuron = brain.get_or_create_cell(concept)
 
         if previous_neuron:
 
@@ -23,18 +21,13 @@ def train_sequence(sequence):
                 concept
             )
 
-            # entrenamiento inicial
-            synapse.usage += 1
-            synapse.reward += 0.1
-
-            # fortalecer ruta usada
-            synapse.strength += 0.05
-
-            # abaratar camino
-            synapse.cost *= 0.999
-
+            # marca el recorrido para reward_thought
+            synapse.activation_trace = 1.0
 
         previous_neuron = current_neuron
+
+    # refuerzo hebbiano del recorrido completo
+    brain.reward_thought(0.1)
 
 
 
