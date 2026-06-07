@@ -4,3 +4,4 @@
 __pycache__/
 brain_dump.txt
 brain_state.json
+.opencode/

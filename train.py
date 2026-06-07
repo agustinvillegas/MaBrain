@@ -5,9 +5,10 @@ from braincell import Brain
 brain = Brain()
 
 
-def train_sequence(sequence):
+def train_sequence(sequence, relations=None):
 
     previous_neuron = None
+    rel_idx = 0
 
     for concept in sequence:
 
@@ -15,14 +16,18 @@ def train_sequence(sequence):
 
         if previous_neuron:
 
+            rel = relations[rel_idx] if relations and rel_idx < len(relations) else None
+
             synapse = brain.connect(
                 previous_neuron,
                 current_neuron,
-                concept
+                concept,
+                relation=rel
             )
 
             # marca el recorrido para reward_thought
             synapse.activation_trace = 1.0
+            rel_idx += 1
 
         previous_neuron = current_neuron
 
@@ -45,7 +50,8 @@ def main():
     for item in dataset["sequences"]:
 
         train_sequence(
-            item["sequence"]
+            item["sequence"],
+            relations=item.get("relations")
         )
 
 

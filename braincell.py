@@ -2,6 +2,7 @@ import json
 import math
 import random
 import uuid
+from collections import deque
 
 
 class Braincell:
@@ -22,13 +23,14 @@ class Braincell:
 
 class Synapse:
 
-    def __init__(self, origin, target, concept):
+    def __init__(self, origin, target, concept, relation=None):
 
         self.id = str(uuid.uuid4())
 
         self.origin = origin
         self.target = target
         self.concept = concept
+        self.relation = relation
 
         self.strength = 1.0
         self.cost = 1.0
@@ -57,6 +59,7 @@ class Brain:
         self.cells = {}
         self.synapses = {}
         self.concept_registry = {}
+        self.working_memory = deque(maxlen=5)
 
         self.thoughts = []
 
@@ -110,14 +113,15 @@ class Brain:
 
                 cell.thought_trace = 0
 
-    def connect(self, a, b, concept):
+    def connect(self, a, b, concept, relation=None):
 
         # evitar duplicados del mismo concepto
         for syn in a.synapses_out:
 
             if (
                 syn.target == b and
-                syn.concept == concept
+                syn.concept == concept and
+                syn.relation == relation
             ):
                 return syn
 
@@ -125,7 +129,8 @@ class Brain:
         syn = Synapse(
             a,
             b,
-            concept
+            concept,
+            relation=relation
         )
 
         self.synapses[syn.id] = syn
@@ -138,7 +143,7 @@ class Brain:
         return syn
 
 
-    def learn(self, text):
+    def learn(self, text, relations=None):
 
         words = text.split()
 
@@ -147,6 +152,7 @@ class Brain:
 
 
         previous = None
+        rel_idx = 0
 
 
         for word in words:
@@ -156,11 +162,16 @@ class Brain:
 
             if previous:
 
+                rel = relations[rel_idx] if relations and rel_idx < len(relations) else None
+
                 self.connect(
                     previous,
                     cell,
-                    word
+                    word,
+                    relation=rel
                 )
+
+                rel_idx += 1
 
 
             previous = cell
@@ -192,9 +203,11 @@ class Brain:
         return options[-1]
 
 
-    def think(self, start_cell, steps=10, temperature=1.0, epsilon=0.0):
+    def think(self, start_cell, steps=10, temperature=1.0, epsilon=0.0, use_working_memory=False):
 
         current = start_cell
+
+        self.working_memory.clear()
 
         result = []
 
@@ -223,12 +236,99 @@ class Brain:
             choice.target.thought_trace += choice.strength
             current = choice.target
 
+            if use_working_memory:
+                self.working_memory.append(current.word)
+
         thought = " ".join(result)
 
         self.thoughts.append(thought)
 
         return thought
 
+
+    def query_relation(self, concept_a, concept_b):
+
+        cell_a_id = self.concept_registry.get(concept_a)
+        cell_b_id = self.concept_registry.get(concept_b)
+
+        if not cell_a_id or not cell_b_id:
+            return None
+
+        cell_a = self.cells[cell_a_id]
+
+        for syn in cell_a.synapses_out:
+            if syn.target.id == cell_b_id:
+                return syn.relation
+
+        return None
+
+
+    def find_by_relation(self, concept, relation):
+
+        cell_id = self.concept_registry.get(concept)
+
+        if not cell_id:
+            return []
+
+        cell = self.cells[cell_id]
+        results = []
+
+        for syn in cell.synapses_out:
+            if syn.relation == relation:
+                target_word = syn.target.word
+                if target_word:
+                    results.append((target_word, syn.strength, syn.cost))
+
+        return sorted(results, key=lambda x: (x[2], -x[1]))
+
+
+    def analogy(self, a, b, c):
+
+        relation = self.query_relation(a, b)
+        if not relation:
+            return []
+
+        candidates = self.find_by_relation(c, relation)
+
+        return candidates
+
+
+    def prune(self, min_usage=1):
+
+        to_remove = []
+
+        for sid, syn in self.synapses.items():
+            if syn.usage < min_usage:
+                to_remove.append(sid)
+
+        for sid in to_remove:
+            syn = self.synapses[sid]
+
+            if syn in syn.origin.synapses_out:
+                syn.origin.synapses_out.remove(syn)
+            if syn in syn.target.synapses_in:
+                syn.target.synapses_in.remove(syn)
+
+            del self.synapses[sid]
+
+        return len(to_remove)
+
+
+
+    def auto_infer_relations(self):
+
+        for syn in self.synapses.values():
+            if syn.relation is not None:
+                continue
+            outgoing = len(syn.origin.synapses_out)
+            incoming = len(syn.target.synapses_in)
+            outgoing_target = len(syn.target.synapses_out)
+            if outgoing >= 3:
+                syn.relation = "IS_A"
+            elif outgoing_target == 0:
+                syn.relation = "PROPERTY"
+            else:
+                syn.relation = "NEXT"
 
 
     def save(self, filename="brain_state.json"):
@@ -265,6 +365,7 @@ class Brain:
                 "target":s.target.id,
 
                 "concept":s.concept,
+                "relation":s.relation,
 
                 "strength":s.strength,
                 "cost":s.cost,
@@ -323,7 +424,8 @@ class Brain:
             syn=Synapse(
                 origin,
                 target,
-                s["concept"]
+                s["concept"],
+                relation=s.get("relation")
             )
 
 

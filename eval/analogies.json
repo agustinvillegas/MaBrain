@@ -1,0 +1,125 @@
+{
+  "name": "analogias_semanticas_v1",
+  "description": "Benchmark de analogias semanticas A:B :: C:? para evaluar MaBrain vs LLM pequeno.",
+  "analogies": [
+    {
+      "a": "perro",
+      "b": "ladra",
+      "c": "gato",
+      "d": "maulla",
+      "relation": "SOUND_OF"
+    },
+    {
+      "a": "vaca",
+      "b": "muge",
+      "c": "gato",
+      "d": "maulla",
+      "relation": "SOUND_OF"
+    },
+    {
+      "a": "perro",
+      "b": "corre",
+      "c": "gato",
+      "d": "corre",
+      "relation": "ACTION"
+    },
+    {
+      "a": "pez",
+      "b": "nada",
+      "c": "ave",
+      "d": "vuela",
+      "relation": "ACTION"
+    },
+    {
+      "a": "arbol",
+      "b": "tronco",
+      "c": "cuerpo",
+      "d": "mano",
+      "relation": "PART_OF"
+    },
+    {
+      "a": "cuerpo",
+      "b": "mano",
+      "c": "arbol",
+      "d": "tronco",
+      "relation": "PART_OF"
+    },
+    {
+      "a": "sol",
+      "b": "calor",
+      "c": "hielo",
+      "d": "frio",
+      "relation": "PRODUCES"
+    },
+    {
+      "a": "fuego",
+      "b": "calor",
+      "c": "hielo",
+      "d": "frio",
+      "relation": "PRODUCES"
+    },
+    {
+      "a": "mamifero",
+      "b": "perro",
+      "c": "ave",
+      "d": "aguila",
+      "relation": "IS_A"
+    },
+    {
+      "a": "mamifero",
+      "b": "gato",
+      "c": "ave",
+      "d": "aguila",
+      "relation": "IS_A"
+    },
+    {
+      "a": "agua",
+      "b": "hielo",
+      "c": "agua",
+      "d": "vapor",
+      "relation": "STATE_OF"
+    },
+    {
+      "a": "dia",
+      "b": "luz",
+      "c": "noche",
+      "d": "oscuridad",
+      "relation": "HAS_PROPERTY"
+    },
+    {
+      "a": "fuego",
+      "b": "quema",
+      "c": "cuchillo",
+      "d": "corta",
+      "relation": "ACTION"
+    },
+    {
+      "a": "ojo",
+      "b": "ver",
+      "c": "oido",
+      "d": "escuchar",
+      "relation": "ACTION"
+    },
+    {
+      "a": "computadora",
+      "b": "procesa",
+      "c": "memoria",
+      "d": "guarda",
+      "relation": "ACTION"
+    },
+    {
+      "a": "rapido",
+      "b": "velocidad",
+      "c": "lento",
+      "d": "pausa",
+      "relation": "RELATES_TO"
+    },
+    {
+      "a": "escuela",
+      "b": "maestro",
+      "c": "hospital",
+      "d": "doctor",
+      "relation": "PLACE_OF"
+    }
+  ]
+}

@@ -207,5 +207,127 @@ class TestPersistence(unittest.TestCase):
         self.assertEqual(len(brain.cells), 0)
 
 
+class TestRelation(unittest.TestCase):
+
+    def test_synapse_with_relation(self):
+        a = Braincell()
+        b = Braincell()
+        s = Synapse(a, b, "ladra", relation="SOUND_OF")
+        self.assertEqual(s.relation, "SOUND_OF")
+
+    def test_connect_with_relation(self):
+        brain = Brain()
+        a = brain.create_cell()
+        b = brain.create_cell()
+        s = brain.connect(a, b, "ladra", relation="SOUND_OF")
+        self.assertEqual(s.relation, "SOUND_OF")
+
+    def test_connect_dedup_with_relation(self):
+        brain = Brain()
+        a = brain.create_cell()
+        b = brain.create_cell()
+        s1 = brain.connect(a, b, "ladra", relation="SOUND_OF")
+        s2 = brain.connect(a, b, "ladra", relation="SOUND_OF")
+        self.assertIs(s1, s2)
+
+    def test_connect_different_relation_no_dedup(self):
+        brain = Brain()
+        a = brain.create_cell()
+        b = brain.create_cell()
+        s1 = brain.connect(a, b, "ladra", relation="SOUND_OF")
+        s2 = brain.connect(a, b, "ladra", relation="ACTION")
+        self.assertIsNot(s1, s2)
+        self.assertEqual(len(brain.synapses), 2)
+
+    def test_query_relation(self):
+        brain = Brain()
+        brain.learn("a b", relations=["NEXT"])
+        rel = brain.query_relation("a", "b")
+        self.assertEqual(rel, "NEXT")
+
+    def test_query_relation_missing(self):
+        brain = Brain()
+        brain.learn("a b")
+        rel = brain.query_relation("a", "c")
+        self.assertIsNone(rel)
+
+    def test_find_by_relation(self):
+        brain = Brain()
+        brain.learn("a b", relations=["SOUND_OF"])
+        brain.learn("a c", relations=["SOUND_OF"])
+        candidates = brain.find_by_relation("a", "SOUND_OF")
+        self.assertEqual(len(candidates), 2)
+        words = [c[0] for c in candidates]
+        self.assertIn("b", words)
+        self.assertIn("c", words)
+
+    def test_analogy(self):
+        brain = Brain()
+        brain.learn("perro ladra", relations=["SOUND_OF"])
+        brain.learn("gato maulla", relations=["SOUND_OF"])
+        brain.learn("perro corre", relations=["ACTION"])
+        candidates = brain.analogy("perro", "ladra", "gato")
+        self.assertGreater(len(candidates), 0)
+        best = candidates[0][0]
+        self.assertEqual(best, "maulla")
+
+
+class TestPrune(unittest.TestCase):
+
+    def test_prune_unused_synapses(self):
+        brain = Brain()
+        brain.learn("a b c")
+        self.assertGreater(len(brain.synapses), 0)
+        n = brain.prune(min_usage=1)
+        self.assertGreater(n, 0)
+        self.assertEqual(len(brain.synapses), 0)
+
+    def test_prune_keeps_used_synapses(self):
+        brain = Brain()
+        brain.learn("a b c")
+        total = len(brain.synapses)
+        s = list(brain.synapses.values())[0]
+        s.usage = 5
+        n = brain.prune(min_usage=1)
+        self.assertEqual(n, total - 1)
+        self.assertEqual(len(brain.synapses), 1)
+        self.assertIn(s.id, brain.synapses)
+
+
+class TestWorkingMemory(unittest.TestCase):
+
+    def test_think_clears_and_populates_working_memory(self):
+        brain = Brain()
+        brain.learn("a b c d")
+        start = brain.get_or_create_cell("a")
+        brain.think(start, steps=3, temperature=0, use_working_memory=True)
+        self.assertGreater(len(brain.working_memory), 0)
+
+    def test_working_memory_has_concepts(self):
+        brain = Brain()
+        brain.learn("a b c")
+        start = brain.get_or_create_cell("a")
+        brain.think(start, steps=3, temperature=0, use_working_memory=True)
+        self.assertIn("b", brain.working_memory)
+        self.assertIn("c", brain.working_memory)
+
+
+class TestLearnWithRelations(unittest.TestCase):
+
+    def test_learn_with_relations(self):
+        brain = Brain()
+        brain.learn("a b c", relations=["NEXT", "NEXT"])
+        rel = brain.query_relation("a", "b")
+        self.assertEqual(rel, "NEXT")
+
+    def test_learn_partial_relations(self):
+        brain = Brain()
+        brain.learn("a b c d", relations=["NEXT"])
+        rel_ab = brain.query_relation("a", "b")
+        rel_bc = brain.query_relation("b", "c")
+        self.assertEqual(rel_ab, "NEXT")
+        self.assertIsNone(rel_bc)
+
+
 if __name__ == "__main__":
     unittest.main()
