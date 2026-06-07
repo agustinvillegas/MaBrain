@@ -3,5 +3,9 @@
 *.pyo
 __pycache__/
 brain_dump.txt
-brain_state.json
 .opencode/
+*.bin
+*.bin.gz
+models/
+states/
+datasets/

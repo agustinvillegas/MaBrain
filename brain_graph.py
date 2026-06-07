@@ -36,7 +36,7 @@ def save_brain(brain: Brain, filename="brain_dump.txt"):
                 f"  concepto: {syn.concept}\n"
                 f"  fuerza: {syn.strength:.3f}\n"
                 f"  costo: {syn.cost:.3f}\n"
-                f"  uso: {syn.usage}\n"
+                f"  uso: {syn.inference_usage}\n"
                 f"  recompensa: {syn.reward:.3f}\n\n"
             )
 

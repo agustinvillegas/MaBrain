@@ -3,6 +3,7 @@ import math
 import random
 import uuid
 from collections import deque
+from embedding_bridge import EmbeddingBridge
 
 
 class Braincell:
@@ -35,7 +36,7 @@ class Synapse:
         self.strength = 1.0
         self.cost = 1.0
 
-        self.usage = 0
+        self.inference_usage = 0
         self.reward = 0.0
 
         # nueva
@@ -54,7 +55,7 @@ class Synapse:
 class Brain:
 
 
-    def __init__(self):
+    def __init__(self, embedding_bridge=None, embedding_weight=0.0):
 
         self.cells = {}
         self.synapses = {}
@@ -62,6 +63,24 @@ class Brain:
         self.working_memory = deque(maxlen=5)
 
         self.thoughts = []
+
+        self.embedding_bridge = embedding_bridge or EmbeddingBridge()
+        self.embedding_weight = embedding_weight
+
+
+    def _resolve_concept(self, concept, min_score=0.1):
+
+        cell_id = self.concept_registry.get(concept)
+        if cell_id:
+            return cell_id
+
+        match = self.embedding_bridge.closest_cell_word(concept, self, min_score=min_score)
+        if match:
+            matched_concept, score = match
+            if self.embedding_bridge.model_loaded or score >= 0.1:
+                return self.concept_registry.get(matched_concept)
+
+        return None
 
 
     def create_cell(self):
@@ -73,11 +92,16 @@ class Brain:
         return cell
 
 
-    def get_or_create_cell(self, concept):
+    def get_or_create_cell(self, concept, fuzzy=False):
 
         if concept in self.concept_registry:
             cell_id = self.concept_registry[concept]
             return self.cells[cell_id]
+
+        if fuzzy:
+            match_id = self._resolve_concept(concept)
+            if match_id:
+                return self.cells[match_id]
 
         cell = Braincell(word=concept)
         self.cells[cell.id] = cell
@@ -112,6 +136,31 @@ class Brain:
                 cell.energy += cell.thought_trace * score
 
                 cell.thought_trace = 0
+
+
+    def punish_thought(self, score):
+
+        for syn in self.synapses.values():
+
+            if syn.activation_trace > 0:
+
+                penalty = syn.activation_trace * score
+
+                syn.reward -= penalty
+                syn.strength = max(syn.strength - penalty * 0.1, 0.01)
+                syn.cost *= (1 + min(penalty * 0.01, 0.2))
+
+                syn.activation_trace = 0
+
+
+        for cell in self.cells.values():
+
+            if cell.thought_trace > 0:
+
+                cell.energy -= cell.thought_trace * score
+
+                cell.thought_trace = 0
+
 
     def connect(self, a, b, concept, relation=None):
 
@@ -178,17 +227,40 @@ class Brain:
 
 
 
-    def _select_synapse(self, options, temperature=1.0, epsilon=0.0):
+    def _dynamic_temperature(self, options, base_temp=1.0):
+
+        if len(options) <= 1:
+            return 0.0
+
+        strengths = [s.strength for s in options]
+        total = sum(strengths)
+        if total <= 0:
+            return base_temp
+
+        probs = [s / total for s in strengths]
+        entropy = -sum(p * math.log(p) for p in probs if p > 0)
+        max_entropy = math.log(len(options))
+
+        if max_entropy <= 0:
+            return 0.0
+
+        return (entropy / max_entropy) * base_temp
+
+
+    def _select_synapse(self, options, temperature=1.0, epsilon=0.0, context=None):
+
+        if temperature is None:
+            temperature = self._dynamic_temperature(options)
 
         if temperature <= 0:
-            return min(options, key=lambda x: x.efficiency())
+            return min(options, key=lambda x: self._embedding_cost(x, context))
 
         if random.random() < epsilon:
             return random.choice(options)
 
-        efficiencies = [s.efficiency() for s in options]
-        max_eff = max(efficiencies)
-        weights = [math.exp(-(e - max_eff) / temperature) for e in efficiencies]
+        costs = [self._embedding_cost(s, context) for s in options]
+        max_cost = max(costs)
+        weights = [math.exp(-(c - max_cost) / temperature) for c in costs]
 
         total = sum(weights)
         if total <= 0:
@@ -202,8 +274,16 @@ class Brain:
                 return options[i]
         return options[-1]
 
+    def _embedding_cost(self, synapse, context=None):
 
-    def think(self, start_cell, steps=10, temperature=1.0, epsilon=0.0, use_working_memory=False):
+        eff = synapse.efficiency()
+        if context and self.embedding_weight > 0:
+            sim = self.embedding_bridge.similarity(synapse.target.word, context)
+            eff -= self.embedding_weight * sim
+        return eff
+
+
+    def think(self, start_cell, steps=10, temperature=None, epsilon=0.0, use_working_memory=False):
 
         current = start_cell
 
@@ -224,13 +304,14 @@ class Brain:
             choice = self._select_synapse(
                 options,
                 temperature=temperature,
-                epsilon=epsilon
+                epsilon=epsilon,
+                context=current.word
             )
 
 
             result.append(choice.concept)
 
-            choice.usage += 1
+            choice.inference_usage += 1
             choice.activation_trace += choice.strength
             choice.target.activation += choice.strength
             choice.target.thought_trace += choice.strength
@@ -248,8 +329,8 @@ class Brain:
 
     def query_relation(self, concept_a, concept_b):
 
-        cell_a_id = self.concept_registry.get(concept_a)
-        cell_b_id = self.concept_registry.get(concept_b)
+        cell_a_id = self.concept_registry.get(concept_a) or self._resolve_concept(concept_a)
+        cell_b_id = self.concept_registry.get(concept_b) or self._resolve_concept(concept_b)
 
         if not cell_a_id or not cell_b_id:
             return None
@@ -265,7 +346,7 @@ class Brain:
 
     def find_by_relation(self, concept, relation):
 
-        cell_id = self.concept_registry.get(concept)
+        cell_id = self.concept_registry.get(concept) or self._resolve_concept(concept)
 
         if not cell_id:
             return []
@@ -286,9 +367,9 @@ class Brain:
 
         results = []
 
-        cell_a_id = self.concept_registry.get(a)
-        cell_b_id = self.concept_registry.get(b)
-        cell_c_id = self.concept_registry.get(c)
+        cell_a_id = self.concept_registry.get(a) or self._resolve_concept(a)
+        cell_b_id = self.concept_registry.get(b) or self._resolve_concept(b)
+        cell_c_id = self.concept_registry.get(c) or self._resolve_concept(c)
 
         if not cell_a_id or not cell_b_id or not cell_c_id:
             return results
@@ -301,6 +382,7 @@ class Brain:
         for syn in cell_a.synapses_out:
             if syn.target.id == cell_b_id:
                 relations_ab.add(syn.relation)
+                syn.inference_usage += 1
 
         for relation in relations_ab:
 
@@ -309,11 +391,18 @@ class Brain:
                     continue
                 if not csyn.target.word:
                     continue
+                csyn.inference_usage += 1
                 score = csyn.strength / max(csyn.cost, 0.001)
+                emb_score = 0.0
+                if self.embedding_weight > 0 and csyn.target.word:
+                    sim = self.embedding_bridge.similarity(csyn.target.word, b)
+                    emb_score = self.embedding_weight * sim
+                    score += emb_score
                 results.append({
                     "d": csyn.target.word,
                     "relation": relation,
                     "score": score,
+                    "embedding_score": emb_score,
                     "strength": csyn.strength,
                     "cost": csyn.cost,
                     "trace": {
@@ -331,7 +420,7 @@ class Brain:
         to_remove = []
 
         for sid, syn in self.synapses.items():
-            if syn.usage < min_usage:
+            if syn.inference_usage < min_usage:
                 to_remove.append(sid)
 
         for sid in to_remove:
@@ -346,6 +435,42 @@ class Brain:
 
         return len(to_remove)
 
+
+    def predict_next(self, context, top_k=5, temperature=1.0):
+
+        words = context.split()
+        if not words:
+            return []
+
+        last_word = words[-1]
+        cell_id = self.concept_registry.get(last_word) or self._resolve_concept(last_word)
+
+        if not cell_id:
+            return []
+
+        cell = self.cells[cell_id]
+        if not cell.synapses_out:
+            return []
+
+        scores = []
+        for s in cell.synapses_out:
+            graph_score = s.strength / max(s.cost, 0.001)
+            if self.embedding_weight > 0 and s.target.word and last_word:
+                graph_score += self.embedding_weight * self.embedding_bridge.similarity(s.target.word, last_word)
+            scores.append(math.exp(graph_score / temperature))
+        total = sum(scores)
+
+        if total <= 0:
+            return [(s.concept, 0.0) for s in cell.synapses_out[:top_k]]
+
+        probs = [s / total for s in scores]
+        results = [
+            (syn.concept, prob)
+            for syn, prob in zip(cell.synapses_out, probs)
+        ]
+        results.sort(key=lambda x: -x[1])
+
+        return results[:top_k]
 
 
     def auto_infer_relations(self):
@@ -364,7 +489,7 @@ class Brain:
                 syn.relation = "NEXT"
 
 
-    def save(self, filename="brain_state.json"):
+    def save(self, filename="states/brain_state.json"):
 
 
         data={
@@ -403,7 +528,7 @@ class Brain:
                 "strength":s.strength,
                 "cost":s.cost,
 
-                "usage":s.usage,
+                "inference_usage":s.inference_usage,
                 "reward":s.reward
 
             }
@@ -420,7 +545,7 @@ class Brain:
 
 
 
-    def load(self, filename="brain_state.json"):
+    def load(self, filename="states/brain_state.json"):
 
         try:
 
@@ -465,7 +590,7 @@ class Brain:
             syn.id=sid
             syn.strength=s["strength"]
             syn.cost=s["cost"]
-            syn.usage=s["usage"]
+            syn.inference_usage=s.get("inference_usage", 0)
             syn.reward=s["reward"]
 
 

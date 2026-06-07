@@ -25,7 +25,6 @@ def train_sequence(brain, sequence, relations=None, reward=0.1):
                 relation=rel
             )
 
-            synapse.usage += 1
             synapse.activation_trace = 1.0
             rel_idx += 1
 
@@ -34,7 +33,7 @@ def train_sequence(brain, sequence, relations=None, reward=0.1):
     brain.reward_thought(reward)
 
 
-def sample_thoughts(brain, n=5, steps=5, temperature=1.0, epsilon=0.1):
+def sample_thoughts(brain, n=5, steps=5, epsilon=0.1):
 
     seen = set()
     samples = []
@@ -44,7 +43,7 @@ def sample_thoughts(brain, n=5, steps=5, temperature=1.0, epsilon=0.1):
         if word and word not in seen:
             seen.add(word)
             start = brain.get_or_create_cell(word)
-            thought = brain.think(start, steps=steps, temperature=temperature, epsilon=epsilon)
+            thought = brain.think(start, steps=steps, temperature=None, epsilon=epsilon)
             samples.append((word, thought))
             if len(samples) >= n:
                 break
@@ -60,7 +59,7 @@ def main():
 
     parser.add_argument(
         "--dataset", "-d",
-        default="dataset.json",
+        default="datasets/dataset.json",
         help="Archivo del dataset (default: dataset.json)"
     )
     parser.add_argument(
@@ -82,7 +81,7 @@ def main():
     )
     parser.add_argument(
         "--save", "-s",
-        default="brain_state.json",
+        default="states/brain_state.json",
         help="Guardar estado final en archivo (default: brain_state.json)"
     )
     parser.add_argument(
@@ -119,9 +118,29 @@ def main():
         help="Pasos por pensamiento de ejemplo (default: 5)"
     )
 
+    parser.add_argument(
+        "--embedding-model",
+        default=None,
+        help="Ruta al modelo FastText (ej: cc.es.300.bin)"
+    )
+    parser.add_argument(
+        "--embedding-weight",
+        type=float,
+        default=0.0,
+        help="Peso de similitud semantica en scoring (default: 0.0)"
+    )
+
     args = parser.parse_args()
 
-    brain = Brain()
+    bridge = None
+    if args.embedding_model:
+        from embedding_bridge import EmbeddingBridge
+        bridge = EmbeddingBridge(args.embedding_model)
+
+    brain = Brain(
+        embedding_bridge=bridge,
+        embedding_weight=args.embedding_weight
+    )
 
     if args.load and os.path.exists(args.load):
         brain.load(args.load)
@@ -185,7 +204,6 @@ def main():
             brain,
             n=args.think_samples,
             steps=args.think_steps,
-            temperature=1.0,
             epsilon=0.1
         )
         for word, thought in samples:

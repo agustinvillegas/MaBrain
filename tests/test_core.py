@@ -34,7 +34,7 @@ class TestSynapse(unittest.TestCase):
         self.assertEqual(s.concept, "animal")
         self.assertEqual(s.strength, 1.0)
         self.assertEqual(s.cost, 1.0)
-        self.assertEqual(s.usage, 0)
+        self.assertEqual(s.inference_usage, 0)
         self.assertEqual(s.reward, 0.0)
         self.assertEqual(s.activation_trace, 0.0)
 
@@ -306,7 +306,7 @@ class TestPrune(unittest.TestCase):
         brain.learn("a b c")
         total = len(brain.synapses)
         s = list(brain.synapses.values())[0]
-        s.usage = 5
+        s.inference_usage = 5
         n = brain.prune(min_usage=1)
         self.assertEqual(n, total - 1)
         self.assertEqual(len(brain.synapses), 1)
@@ -346,6 +346,286 @@ class TestLearnWithRelations(unittest.TestCase):
         rel_bc = brain.query_relation("b", "c")
         self.assertEqual(rel_ab, "NEXT")
         self.assertIsNone(rel_bc)
+
+
+class TestPunishThought(unittest.TestCase):
+
+    def test_punish_reduces_strength(self):
+        brain = Brain()
+        brain.learn("a b")
+        s = list(brain.synapses.values())[0]
+        old_strength = s.strength
+        s.activation_trace = 1.0
+        brain.punish_thought(1.0)
+        self.assertLess(s.strength, old_strength)
+        self.assertLess(s.reward, 0)
+
+    def test_punish_increases_cost(self):
+        brain = Brain()
+        brain.learn("a b")
+        s = list(brain.synapses.values())[0]
+        old_cost = s.cost
+        s.activation_trace = 1.0
+        brain.punish_thought(1.0)
+        self.assertGreater(s.cost, old_cost)
+
+    def test_punish_clears_trace(self):
+        brain = Brain()
+        brain.learn("a b")
+        s = list(brain.synapses.values())[0]
+        s.activation_trace = 1.0
+        brain.punish_thought(1.0)
+        self.assertEqual(s.activation_trace, 0)
+
+    def test_punish_noop_without_trace(self):
+        brain = Brain()
+        brain.learn("a b")
+        s = list(brain.synapses.values())[0]
+        old_strength = s.strength
+        brain.punish_thought(1.0)
+        self.assertEqual(s.strength, old_strength)
+
+    def test_punish_reduces_cell_energy(self):
+        brain = Brain()
+        brain.learn("a b")
+        s = list(brain.synapses.values())[0]
+        cell = s.target
+        old_energy = cell.energy
+        cell.thought_trace = 1.0
+        brain.punish_thought(1.0)
+        self.assertLess(cell.energy, old_energy)
+
+
+class TestDynamicTemperature(unittest.TestCase):
+
+    def test_single_option_returns_zero(self):
+        brain = Brain()
+        a = brain.create_cell()
+        b = brain.create_cell()
+        s = brain.connect(a, b, "test")
+        temp = brain._dynamic_temperature([s])
+        self.assertEqual(temp, 0.0)
+
+    def test_equal_options_returns_base_temp(self):
+        brain = Brain()
+        a = brain.create_cell()
+        b = brain.create_cell()
+        c = brain.create_cell()
+        s1 = brain.connect(a, b, "x")
+        s2 = brain.connect(a, c, "y")
+        s1.strength = 1.0
+        s2.strength = 1.0
+        temp = brain._dynamic_temperature([s1, s2], base_temp=2.0)
+        self.assertAlmostEqual(temp, 2.0, places=4)
+
+    def test_dominant_option_low_temperature(self):
+        brain = Brain()
+        a = brain.create_cell()
+        b = brain.create_cell()
+        c = brain.create_cell()
+        s1 = brain.connect(a, b, "x")
+        s2 = brain.connect(a, c, "y")
+        s1.strength = 100.0
+        s2.strength = 1.0
+        temp = brain._dynamic_temperature([s1, s2], base_temp=1.0)
+        self.assertLess(temp, 0.5)
+
+    def test_think_with_none_temperature_no_error(self):
+        brain = Brain()
+        brain.learn("a b c")
+        start = brain.get_or_create_cell("a")
+        thought = brain.think(start, steps=2, temperature=None)
+        self.assertIsInstance(thought, str)
+        self.assertGreater(len(thought), 0)
+
+
+class TestPredictNext(unittest.TestCase):
+
+    def test_predict_basic(self):
+        brain = Brain()
+        brain.learn("a b c")
+        preds = brain.predict_next("a")
+        self.assertGreater(len(preds), 0)
+        self.assertEqual(preds[0][0], "b")
+
+    def test_predict_returns_probabilities(self):
+        brain = Brain()
+        brain.learn("a b c")
+        brain.learn("a d e")
+        preds = brain.predict_next("a", top_k=10)
+        self.assertEqual(len(preds), 2)
+        total_p = sum(p for _, p in preds)
+        self.assertAlmostEqual(total_p, 1.0, places=5)
+
+    def test_predict_unknown_context(self):
+        brain = Brain()
+        brain.learn("a b c")
+        preds = brain.predict_next("x")
+        self.assertEqual(len(preds), 0)
+
+    def test_predict_empty_context(self):
+        brain = Brain()
+        preds = brain.predict_next("")
+        self.assertEqual(len(preds), 0)
+
+    def test_predict_top_k(self):
+        brain = Brain()
+        brain.learn("a b c d e f")
+        brain.learn("a g h i j")
+        preds = brain.predict_next("a", top_k=2)
+        self.assertLessEqual(len(preds), 2)
+
+    def test_predict_multi_word_context(self):
+        brain = Brain()
+        brain.learn("a b c")
+        preds = brain.predict_next("x y z a b")
+        self.assertEqual(preds[0][0], "c")
+
+
+class TestEmbeddingBridge(unittest.TestCase):
+
+    def test_char_similarity_identical(self):
+        from embedding_bridge import EmbeddingBridge
+        b = EmbeddingBridge()
+        self.assertEqual(b.similarity("perro", "perro"), 1.0)
+
+    def test_char_similarity_morphological(self):
+        from embedding_bridge import EmbeddingBridge
+        b = EmbeddingBridge()
+        sim = b.similarity("corriendo", "corre")
+        self.assertGreater(sim, 0.1)
+
+    def test_char_similarity_different(self):
+        from embedding_bridge import EmbeddingBridge
+        b = EmbeddingBridge()
+        sim = b.similarity("a", "b")
+        self.assertEqual(sim, 0.0)
+
+    def test_closest_returns_sorted(self):
+        from embedding_bridge import EmbeddingBridge
+        b = EmbeddingBridge()
+        candidates = ["hola", "ola", "casa"]
+        matches = b.closest("ola", candidates, min_score=0.1)
+        self.assertGreater(matches[0][1], matches[1][1])
+
+    def test_closest_empty_candidates(self):
+        from embedding_bridge import EmbeddingBridge
+        b = EmbeddingBridge()
+        self.assertEqual(b.closest("test", []), [])
+
+    def test_closest_cell_word_exact(self):
+        from braincell import Brain
+        brain = Brain()
+        brain.get_or_create_cell("perro")
+        match = brain.embedding_bridge.closest_cell_word("perro", brain)
+        self.assertIsNotNone(match)
+        self.assertEqual(match[0], "perro")
+
+    def test_closest_cell_word_fuzzy(self):
+        from braincell import Brain
+        brain = Brain()
+        brain.get_or_create_cell("perro")
+        match = brain.embedding_bridge.closest_cell_word("pero", brain, min_score=0.1)
+        self.assertIsNotNone(match)
+
+
+class TestFuzzyMatching(unittest.TestCase):
+
+    def test_get_or_create_cell_fuzzy_reuses(self):
+        brain = Brain()
+        orig = brain.get_or_create_cell("corriendo")
+        fuzzy = brain.get_or_create_cell("corre", fuzzy=True)
+        self.assertIs(fuzzy, orig)
+
+    def test_get_or_create_cell_fuzzy_no_match_creates_new(self):
+        brain = Brain()
+        brain.get_or_create_cell("perro")
+        cell = brain.get_or_create_cell("sol", fuzzy=True)
+        self.assertIsNotNone(cell)
+        self.assertEqual(cell.word, "sol")
+
+    def test_analogy_finds_fuzzy_match(self):
+        brain = Brain()
+        brain.learn("perro ladra", relations=["SOUND"])
+        brain.learn("gato maulla", relations=["SOUND"])
+        results = brain.analogy("perro", "ladra", "gat")
+        self.assertGreater(len(results), 0)
+        self.assertEqual(results[0]["d"], "maulla")
+
+    def test_predict_next_fuzzy(self):
+        brain = Brain()
+        brain.learn("a b c")
+        preds = brain.predict_next("hola a b")
+        self.assertGreater(len(preds), 0)
+        self.assertEqual(preds[0][0], "c")
+
+    def test_query_relation_fuzzy(self):
+        brain = Brain()
+        brain.learn("a b", relations=["NEXT"])
+        rel = brain.query_relation("a", "b")
+        self.assertEqual(rel, "NEXT")
+
+    def test_find_by_relation_fuzzy(self):
+        brain = Brain()
+        brain.learn("a b", relations=["SOUND_OF"])
+        brain.learn("a c", relations=["SOUND_OF"])
+        candidates = brain.find_by_relation("a", "SOUND_OF")
+        self.assertEqual(len(candidates), 2)
+
+
+class TestEmbeddingScoring(unittest.TestCase):
+
+    def test_analogy_embedding_weight_boosts(self):
+        brain = Brain(embedding_weight=0.5)
+        brain.learn("perro ladra", relations=["SOUND"])
+        brain.learn("gato maulla", relations=["SOUND"])
+        brain.learn("gato ronronea", relations=["SOUND"])
+        results = brain.analogy("perro", "ladra", "gato")
+        self.assertGreater(len(results), 0)
+        self.assertEqual(results[0]["d"], "maulla")
+        self.assertGreater(results[0]["embedding_score"], 0)
+
+    def test_analogy_embedding_prefers_semantic_match(self):
+        brain = Brain(embedding_weight=0.5)
+        brain.learn("perro ladra", relations=["SOUND"])
+        brain.learn("perro animal", relations=["IS_A"])
+        brain.learn("gato maulla", relations=["SOUND"])
+        brain.learn("gato felino", relations=["IS_A"])
+        results = brain.analogy("perro", "ladra", "gato")
+        self.assertGreater(len(results), 0)
+        self.assertEqual(results[0]["d"], "maulla")
+        self.assertGreater(results[0]["embedding_score"], 0)
+
+    def test_think_prefers_semantically_close(self):
+        brain = Brain(embedding_weight=0.5)
+        brain.learn("perro ladra")
+        brain.learn("perro animal")
+        brain.learn("gato maulla")
+        start = brain.get_or_create_cell("gato")
+        thought = brain.think(start, steps=2, temperature=0.5)
+        self.assertEqual(thought, "maulla")
+
+    def test_predict_embedding_boost(self):
+        brain = Brain(embedding_weight=0.3)
+        brain.learn("sol luz calor")
+        brain.learn("sol energia vida")
+        preds = brain.predict_next("sol")
+        words = [p[0] for p in preds]
+        self.assertIn("luz", words)
+        self.assertIn("energia", words)
+
+    def test_embedding_cost_decreases_for_similar(self):
+        brain = Brain(embedding_weight=0.5)
+        brain.learn("perro ladra")
+        brain.learn("perro animal")
+        cell = brain.get_or_create_cell("perro")
+        cost_normal = brain._embedding_cost(cell.synapses_out[0])
+        cost_context = brain._embedding_cost(cell.synapses_out[0], context="perro")
+        self.assertLessEqual(cost_context, cost_normal)
+
+    def test_embedding_weight_zero_by_default(self):
+        brain = Brain()
+        self.assertEqual(brain.embedding_weight, 0.0)
 
 
 if __name__ == "__main__":
