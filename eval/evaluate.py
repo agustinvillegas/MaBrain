@@ -103,6 +103,89 @@ def run_ma_brain(brain, analogies):
     }
 
 
+STRUCTURAL_RELATIONS = {"CAUSA", "FUNCION", "PARTE_DE", "INSTRUMENTO", "UBICADO_EN",
+                        "EFECTO_DE", "FUNCION_DE", "TIENE_PARTE", "CONTIENE"}
+
+
+def build_benchmark_structural(brain):
+    """Genera analogías solo para relaciones estructurales (CAUSA, FUNCION, etc.)."""
+
+    by_relation = {}
+    for syn in brain.synapses.values():
+        ow = syn.origin.word
+        tw = syn.target.word
+        rel = syn.relation
+        if not ow or not tw or rel not in STRUCTURAL_RELATIONS:
+            continue
+        by_relation.setdefault(rel, []).append({
+            "from": ow, "to": tw, "strength": syn.strength, "cost": syn.cost
+        })
+
+    analogies = []
+    for rel, pairs in by_relation.items():
+        if len(pairs) < 2:
+            continue
+        for i, p1 in enumerate(pairs):
+            for j, p2 in enumerate(pairs):
+                if i == j:
+                    continue
+                analogies.append({
+                    "a": p1["from"], "b": p1["to"],
+                    "c": p2["from"], "d": p2["to"],
+                    "relation": rel,
+                })
+
+    return analogies
+
+
+def run_ma_brain_structural(brain, analogies, hops=2, min_sim=0.1):
+
+    total = len(analogies)
+    correct_top1 = 0
+    correct_top5 = 0
+    not_found = 0
+    results = []
+
+    start = time.perf_counter()
+
+    for item in analogies:
+        a, b, c, d = item["a"], item["b"], item["c"], item["d"]
+        candidates = brain.analogy_structural(a, b, c, top_k=5, hops=hops, min_sim=min_sim)
+
+        top1 = candidates[0]["d"] if candidates else None
+        top5 = [r["d"] for r in candidates[:5]]
+
+        if top1 == d:
+            correct_top1 += 1
+        if d in top5:
+            correct_top5 += 1
+        if not candidates:
+            not_found += 1
+
+        results.append({
+            "analogy": f"{a}:{b} :: {c}:?",
+            "expected": d,
+            "top1": top1,
+            "top5": top5,
+            "correct": top1 == d,
+            "in_top5": d in top5,
+            "structural_score": candidates[0]["structural_score"] if candidates else 0,
+        })
+
+    elapsed = time.perf_counter() - start
+
+    return {
+        "total": total,
+        "correct_top1": correct_top1,
+        "correct_top5": correct_top5,
+        "not_found": not_found,
+        "accuracy_top1": correct_top1 / total * 100 if total else 0,
+        "accuracy_top5": correct_top5 / total * 100 if total else 0,
+        "elapsed_seconds": elapsed,
+        "results": results,
+    }
+
+
 def print_report(stats):
 
     print("=" * 60)

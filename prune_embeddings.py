@@ -4,8 +4,8 @@ from embedding_bridge import EmbeddingBridge
 
 def main():
     parser = argparse.ArgumentParser(description="Podar sinapsis guiada por embeddings")
-    parser.add_argument("--load", default="states/brain_state_v5_embed.json", help="Estado del cerebro a cargar")
-    parser.add_argument("--save", default="states/brain_state_pruned.json", help="Archivo de salida")
+    parser.add_argument("--load", default="states/brain_state_v6_evaled.json", help="Estado del cerebro a cargar")
+    parser.add_argument("--save", default="states/brain_state_v6_pruned.json", help="Archivo de salida")
     parser.add_argument("--embedding-model", default="models/cc.es.300.bin", help="Modelo FastText")
     parser.add_argument("--min-usage", type=int, default=0, help="Uso mínimo (0 = ignorar uso)")
     parser.add_argument("--min-sim", type=float, default=0.3, help="Similitud semántica mínima (default: 0.3)")

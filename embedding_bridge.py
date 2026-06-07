@@ -2,6 +2,7 @@ import os
 import math
 
 
+
 def _char_ngrams(word, n=3):
     return {word[i:i + n] for i in range(len(word) - n + 1)}
 

@@ -13,6 +13,17 @@ PROPERTY_OF = "PROPERTY_OF"
 HAS_INV = "HAS_INVERSE"
 ATRIBUTO_DE = "ATRIBUTO_DE"
 CARACTERISTICA_DE = "CARACTERISTICA_DE"
+CAUSA = "CAUSA"
+FUNCION = "FUNCION"
+PARTE_DE = "PARTE_DE"
+INSTRUMENTO = "INSTRUMENTO"
+OPUESTO = "OPUESTO"
+SIMILAR_A = "SIMILAR_A"
+UBICADO_EN = "UBICADO_EN"
+EFECTO_DE = "EFECTO_DE"
+FUNCION_DE = "FUNCION_DE"
+TIENE_PARTE = "TIENE_PARTE"
+CONTIENE = "CONTIENE"
 
 INVERSE_MAP = {
     IS_A: HAS,
@@ -21,6 +32,10 @@ INVERSE_MAP = {
     HAS: HAS_INV,
     IS_ATRIBUTO: ATRIBUTO_DE,
     HAS_CARACTERISTICA: CARACTERISTICA_DE,
+    CAUSA: EFECTO_DE,
+    FUNCION: FUNCION_DE,
+    PARTE_DE: TIENE_PARTE,
+    UBICADO_EN: CONTIENE,
 }
 
 def seq(words, relations=None):
@@ -31,6 +46,27 @@ def chain(head, *tail, rel=NEXT):
 
 def isa(member, *categories):
     return seq([member] + list(categories), [IS_A] * len(categories))
+
+def cause(cause_word, effect_word):
+    return seq([cause_word, effect_word], [CAUSA])
+
+def funcion(organ, action):
+    return seq([organ, action], [FUNCION])
+
+def parte_de(part, whole):
+    return seq([part, whole], [PARTE_DE])
+
+def instrumento(agent, tool, action):
+    return seq([agent, tool, action], [INSTRUMENTO, NEXT])
+
+def opuesto(a, b):
+    return seq([a, b], [OPUESTO])
+
+def similar(a, b):
+    return seq([a, b], [SIMILAR_A])
+
+def ubicado_en(entity, location):
+    return seq([entity, location], [UBICADO_EN])
 
 # ================= ANIMALS =================
 SUBGROUPS = {
@@ -204,20 +240,31 @@ def generate_body_sequences():
     s = []
     for group, parts in CUERPO.items():
         for part in parts:
-            s.append(isa(part, group.replace("s",""), "parte_del_cuerpo", "cuerpo", "humano"))
-    s.append(chain("ojo", "ver", rel=NEXT))
-    s.append(chain("oreja", "escuchar", rel=NEXT))
-    s.append(chain("nariz", "oler", rel=NEXT))
-    s.append(chain("lengua", "gustar", rel=NEXT))
-    s.append(chain("piel", "tocar", rel=NEXT))
-    s.append(chain("corazon", "latir", rel=NEXT))
-    s.append(chain("pulmon", "respirar", rel=NEXT))
-    s.append(chain("cerebro", "pensar", rel=NEXT))
-    s.append(chain("mano", "agarrar", rel=NEXT))
-    s.append(chain("pie", "caminar", rel=NEXT))
-    s.append(chain("boca", "hablar", rel=NEXT))
-    s.append(chain("diente", "masticar", rel=NEXT))
-    s.append(chain("estomago", "digerir", rel=NEXT))
+            group_word = group.replace("s", "")
+            s.append(isa(part, group_word, "parte_del_cuerpo", "cuerpo", "humano"))
+            s.append(parte_de(part, group_word))
+    # Funciones de órganos y partes
+    s.append(funcion("ojo", "ver"))
+    s.append(funcion("oreja", "escuchar"))
+    s.append(funcion("nariz", "oler"))
+    s.append(funcion("lengua", "gustar"))
+    s.append(funcion("piel", "tocar"))
+    s.append(funcion("corazon", "latir"))
+    s.append(funcion("pulmon", "respirar"))
+    s.append(funcion("cerebro", "pensar"))
+    s.append(funcion("mano", "agarrar"))
+    s.append(funcion("pie", "caminar"))
+    s.append(funcion("boca", "hablar"))
+    s.append(funcion("diente", "masticar"))
+    s.append(funcion("estomago", "digerir"))
+    s.append(funcion("higado", "filtrar"))
+    s.append(funcion("riñon", "filtrar"))
+    s.append(funcion("musculo", "contraer"))
+    s.append(funcion("sangre", "oxigenar"))
+    # PARTE_DE para los grupos principales
+    s.append(parte_de("cabeza", "cuerpo"))
+    s.append(parte_de("torso", "cuerpo"))
+    s.append(parte_de("extremidades", "cuerpo"))
     return s
 
 # ================ NATURALEZA =================
@@ -242,6 +289,22 @@ def generate_nature_sequences():
             for p in props:
                 s.append(chain(name, p, rel=NEXT))
             s.append(isa(name, cat.replace("s",""), "naturaleza", "mundo"))
+    # Relaciones CAUSA
+    s.append(cause("lluvia", "rio_crece"))
+    s.append(cause("lluvia", "inundacion"))
+    s.append(cause("fuego", "calor"))
+    s.append(cause("fuego", "ceniza"))
+    s.append(cause("viento", "erosion"))
+    s.append(cause("sol", "luz"))
+    s.append(cause("sol", "calor"))
+    s.append(cause("nube", "lluvia"))
+    s.append(cause("nieve", "frio"))
+    s.append(cause("nieve", "hielo"))
+    s.append(cause("rio", "fertilidad"))
+    s.append(cause("mar", "sal"))
+    s.append(cause("viento", "ola"))
+    s.append(cause("sequia", "desierto"))
+    s.append(cause("fotosintesis", "oxigeno"))
     return s
 
 # ================ TECNOLOGIA =================
@@ -260,15 +323,31 @@ def generate_tech_sequences():
         for member in group["members"]:
             full_chain = [member] + [base] + ancestors
             s.append(isa(*full_chain))
-    s.append(chain("computadora", "procesar", rel=NEXT))
-    s.append(chain("computadora", "calcular", rel=NEXT))
-    s.append(chain("computadora", "programa", rel=NEXT))
-    s.append(chain("telefono", "comunicar", rel=NEXT))
-    s.append(chain("telefono", "mensaje", rel=NEXT))
-    s.append(chain("navegador", "explorar", rel=NEXT))
-    s.append(chain("programa", "ejecutar", rel=NEXT))
-    s.append(chain("procesador", "calculo", rel=NEXT))
-    s.append(chain("memoria", "almacenar", rel=NEXT))
+    # FUNCION
+    s.append(funcion("computadora", "procesar"))
+    s.append(funcion("computadora", "calcular"))
+    s.append(funcion("telefono", "comunicar"))
+    s.append(funcion("navegador", "explorar"))
+    s.append(funcion("programa", "ejecutar"))
+    s.append(funcion("procesador", "calculo"))
+    s.append(funcion("memoria", "almacenar"))
+    s.append(funcion("disco_duro", "guardar"))
+    s.append(funcion("pantalla", "mostrar"))
+    s.append(funcion("teclado", "escribir"))
+    s.append(funcion("mouse", "navegar"))
+    s.append(funcion("aplicacion", "automatizar"))
+    s.append(funcion("algoritmo", "resolver"))
+    s.append(funcion("base_datos", "organizar"))
+    s.append(funcion("sistema_operativo", "gestionar"))
+    # INSTRUMENTO
+    s.append(instrumento("usuario", "teclado", "escribir"))
+    s.append(instrumento("usuario", "mouse", "navegar"))
+    s.append(instrumento("usuario", "pantalla", "ver"))
+    s.append(instrumento("programador", "computadora", "programar"))
+    s.append(instrumento("disenador", "aplicacion", "crear"))
+    # NEXT (algunos extras)
+    s.append(chain("computadora", "internet", rel=NEXT))
+    s.append(chain("telefono", "internet", rel=NEXT))
     return s
 
 # ================ EMOCIONES =================
@@ -392,17 +471,43 @@ def generate_society_sequences():
         intermediate = prof_group.get("intermediate",{}).get(member, [])
         full_chain = [member] + intermediate + [base] + ancestors
         s.append(isa(*full_chain))
+    # FUNCION (antes NEXT)
     for prof, action in prof_group["actions"].items():
-        s.append(chain(prof, action, rel=NEXT))
+        s.append(funcion(prof, action))
+    # UBICADO_EN
+    s.append(ubicado_en("medico", "hospital"))
+    s.append(ubicado_en("maestro", "escuela"))
+    s.append(ubicado_en("ingeniero", "oficina"))
+    s.append(ubicado_en("abogado", "oficina"))
+    s.append(ubicado_en("bombero", "estacion_bomberos"))
+    s.append(ubicado_en("policia", "comisaria"))
+    s.append(ubicado_en("cocinero", "restaurante"))
+    s.append(ubicado_en("piloto", "aeropuerto"))
+    s.append(ubicado_en("escritor", "biblioteca"))
+    s.append(ubicado_en("artista", "museo"))
+    # INSTRUMENTO
+    s.append(instrumento("escritor", "computadora", "escribir"))
+    s.append(instrumento("ingeniero", "computadora", "disenar"))
+    s.append(instrumento("medico", "instrumento_quirurgico", "operar"))
+    s.append(instrumento("artista", "pincel", "pintar"))
+    s.append(instrumento("cocinero", "cuchillo", "cortar"))
+    # LUGARES (ISA + FUNCION + PARTE_DE)
     place_group = SOCIEDAD["lugares"]
     for place in place_group["members"]:
         s.append(isa(place, place_group["base"], *place_group["ancestors"]))
-    s.append(chain("escuela", "estudiar", rel=NEXT))
-    s.append(chain("hospital", "sanar", rel=NEXT))
-    s.append(chain("biblioteca", "leer", rel=NEXT))
-    s.append(chain("parque", "pasear", rel=NEXT))
-    s.append(chain("museo", "exponer", rel=NEXT))
-    s.append(chain("restaurante", "comer", rel=NEXT))
+    s.append(funcion("escuela", "educar"))
+    s.append(funcion("hospital", "sanar"))
+    s.append(funcion("biblioteca", "prestar"))
+    s.append(funcion("parque", "recrear"))
+    s.append(funcion("museo", "exponer"))
+    s.append(funcion("restaurante", "alimentar"))
+    s.append(funcion("banco", "guardar_dinero"))
+    s.append(funcion("oficina", "trabajar"))
+    s.append(funcion("teatro", "actuar"))
+    s.append(funcion("tienda", "vender"))
+    s.append(parte_de("aula", "escuela"))
+    s.append(parte_de("sala_operaciones", "hospital"))
+    s.append(parte_de("sala_lectura", "biblioteca"))
     return s
 
 # ================ COLORES =================
@@ -455,6 +560,20 @@ def generate_action_sequences():
         s.append(isa(verb, "accion_fisica", "movimiento", "concepto"))
     for verb, result in ACCIONES_FISICAS["resultados"].items():
         s.append(chain(verb, result, rel=NEXT))
+    # CAUSA
+    s.append(cause("empujar", "mover"))
+    s.append(cause("tirar", "mover"))
+    s.append(cause("levantar", "elevar"))
+    s.append(cause("cargar", "transportar"))
+    s.append(cause("golpear", "romper"))
+    s.append(cause("empujar", "caer"))
+    # INSTRUMENTO
+    s.append(instrumento("persona", "mano", "agarrar"))
+    s.append(instrumento("persona", "pie", "caminar"))
+    s.append(instrumento("persona", "cuchillo", "cortar"))
+    s.append(instrumento("persona", "martillo", "golpear"))
+    s.append(instrumento("persona", "llave", "abrir"))
+    s.append(instrumento("persona", "lapiz", "escribir"))
     return s
 
 # ================ ABSTRACTOS =================
@@ -473,6 +592,63 @@ def generate_abstract_sequences():
         s.append(isa(concept, "concepto_abstracto", "idea", "mente"))
     for concept, related in ABSTRACTOS["pares"].items():
         s.append(chain(concept, related, rel=HAS))
+    return s
+
+# ================ FISICA / CIENCIA =================
+FISICA = {
+    "fuerzas": {
+        "gravedad": ["atraer", "caer", "masa"],
+        "magnetismo": ["atraer", "metal", "iman"],
+        "electricidad": ["cargar", "bombilla", "circuito"],
+        "friccion": ["calor", "resistencia", "desgaste"],
+    },
+    "procesos": {
+        "fotosintesis": ["luz", "clorofila", "glucosa"],
+        "combustion": ["fuego", "calor", "dioxido"],
+        "evaporacion": ["agua", "vapor", "calor"],
+        "condensacion": ["vapor", "agua", "frio"],
+        "fusion": ["solido", "liquido", "calor"],
+        "solidificacion": ["liquido", "solido", "frio"],
+    },
+    "materiales": {
+        "agua": ["liquido", "transparente", "vida", "h2o"],
+        "hierro": ["metal", "duro", "conductor", "pesado"],
+        "oro": ["metal", "brillante", "valioso", "blando"],
+        "plastico": ["sintetico", "moldeable", "aislante", "ligero"],
+    },
+}
+
+def generate_physics_sequences():
+    s = []
+    for cat, items in FISICA.items():
+        for name, props in items.items():
+            for p in props:
+                s.append(chain(name, p, rel=NEXT))
+            s.append(isa(name, cat.replace("s",""), "fenomeno_fisico", "ciencia", "conocimiento"))
+    # CAUSA
+    s.append(cause("gravedad", "caer"))
+    s.append(cause("gravedad", "peso"))
+    s.append(cause("magnetismo", "atraccion"))
+    s.append(cause("electricidad", "luz"))
+    s.append(cause("friccion", "calor"))
+    s.append(cause("fotosintesis", "oxigeno"))
+    s.append(cause("combustion", "calor"))
+    s.append(cause("evaporacion", "vapor"))
+    s.append(cause("condensacion", "lluvia"))
+    s.append(cause("fusion", "liquido"))
+    s.append(cause("solidificacion", "hielo"))
+    s.append(cause("calor", "evaporacion"))
+    s.append(cause("frio", "solidificacion"))
+    # PARTE_DE (materiales -> propiedades)
+    s.append(parte_de("electricidad", "fisica"))
+    s.append(parte_de("magnetismo", "fisica"))
+    s.append(parte_de("gravedad", "fisica"))
+    s.append(parte_de("fotosintesis", "biologia"))
+    s.append(parte_de("combustion", "quimica"))
+    # FUNCION (herramientas cientificas)
+    s.append(funcion("iman", "atraer"))
+    s.append(funcion("bombilla", "iluminar"))
+    s.append(funcion("circuito", "conducir"))
     return s
 
 # ============================================================
@@ -518,6 +694,7 @@ def main():
         ("matematicas", generate_math_sequences),
         ("acciones", generate_action_sequences),
         ("abstractos", generate_abstract_sequences),
+        ("fisica", generate_physics_sequences),
     ]
     for name, gen in generators:
         seqs = gen()
@@ -538,15 +715,15 @@ def main():
         vocab.update(s["sequence"])
     dataset = {
         "name": "conceptos_rutas_v5",
-        "description": f"Dataset v5 con {len(final)} secuencias, {len(vocab)} palabras, jerarquías profundas e inversas",
+        "description": f"Dataset v6 con {len(final)} secuencias, {len(vocab)} palabras, relaciones funcionales/causales/espaciales",
         "sequences": final,
     }
-    with open("datasets/dataset_v5.json", "w", encoding="utf-8") as f:
+    with open("datasets/dataset_v6.json", "w", encoding="utf-8") as f:
         json.dump(dataset, f, indent=2, ensure_ascii=False)
     print(f"  Secuencias: {len(final)}")
     print(f"  Palabras unicas: {len(vocab)}")
     print(f"  Dominios: {len(generators)}")
-    print(f"  Guardado: datasets/dataset_v5.json")
+    print(f"  Guardado: datasets/dataset_v6.json")
 
 if __name__ == "__main__":
     main()
