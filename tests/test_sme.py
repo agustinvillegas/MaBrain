@@ -5,31 +5,31 @@ from braincell import Brain, Braincell
 def _make_brain():
     """Crea un brain pequeño con relaciones estructurales para test."""
     brain = Brain()
-    # FUNCION relations
-    brain.learn("corazon latir", relations=["FUNCION"])
-    brain.learn("pulmon respirar", relations=["FUNCION"])
-    brain.learn("cerebro pensar", relations=["FUNCION"])
-    brain.learn("mano agarrar", relations=["FUNCION"])
-    brain.learn("medico curar", relations=["FUNCION"])
-    brain.learn("maestro enseñar", relations=["FUNCION"])
+    # FUNCTION relations
+    brain.learn("heart pump", relations=["FUNCTION"])
+    brain.learn("lung breathe", relations=["FUNCTION"])
+    brain.learn("brain think", relations=["FUNCTION"])
+    brain.learn("hand grasp", relations=["FUNCTION"])
+    brain.learn("doctor heal", relations=["FUNCTION"])
+    brain.learn("teacher teach", relations=["FUNCTION"])
 
-    # CAUSA relations
-    brain.learn("fuego calor", relations=["CAUSA"])
-    brain.learn("lluvia rio_crece", relations=["CAUSA"])
-    brain.learn("sol luz", relations=["CAUSA"])
-    brain.learn("viento erosion", relations=["CAUSA"])
+    # CAUSE relations
+    brain.learn("fire heat", relations=["CAUSE"])
+    brain.learn("rain grow", relations=["CAUSE"])
+    brain.learn("sun light", relations=["CAUSE"])
+    brain.learn("wind erosion", relations=["CAUSE"])
 
-    # PARTE_DE relations
-    brain.learn("corazon cuerpo", relations=["PARTE_DE"])
-    brain.learn("cabeza cuerpo", relations=["PARTE_DE"])
-    brain.learn("mano brazo", relations=["PARTE_DE"])
-    brain.learn("aula escuela", relations=["PARTE_DE"])
-    brain.learn("sala_operaciones hospital", relations=["PARTE_DE"])
+    # PART_OF relations
+    brain.learn("heart body", relations=["PART_OF"])
+    brain.learn("head body", relations=["PART_OF"])
+    brain.learn("hand arm", relations=["PART_OF"])
+    brain.learn("classroom school", relations=["PART_OF"])
+    brain.learn("operating_room hospital", relations=["PART_OF"])
 
     # IS_A + HAS for context
-    brain.learn("corazon organo", relations=["IS_A"])
-    brain.learn("pulmon organo", relations=["IS_A"])
-    brain.learn("cerebro organo", relations=["IS_A"])
+    brain.learn("heart organ", relations=["IS_A"])
+    brain.learn("lung organ", relations=["IS_A"])
+    brain.learn("brain organ", relations=["IS_A"])
 
     return brain
 
@@ -38,14 +38,14 @@ class TestExtractNeighborhood(unittest.TestCase):
 
     def test_neighborhood_1hop(self):
         brain = _make_brain()
-        cell = brain.get_or_create_cell("corazon")
+        cell = brain.get_or_create_cell("heart")
         hood = brain._extract_neighborhood(cell, hops=1)
         self.assertIn(cell.id, hood["nodes"])
-        self.assertGreaterEqual(len(hood["edges"]), 2)  # corazon -> latir, corazon -> cuerpo
+        self.assertGreaterEqual(len(hood["edges"]), 2)  # heart->pump, heart->body
 
     def test_neighborhood_2hops(self):
         brain = _make_brain()
-        cell = brain.get_or_create_cell("corazon")
+        cell = brain.get_or_create_cell("heart")
         hood = brain._extract_neighborhood(cell, hops=2)
         self.assertGreater(len(hood["nodes"]), 1)
         self.assertGreater(len(hood["edges"]), 1)
@@ -54,74 +54,73 @@ class TestExtractNeighborhood(unittest.TestCase):
 class TestAnalogyStructural(unittest.TestCase):
 
     def test_funcion_analogy_cross_domain(self):
-        """corazon:latir :: pulmon:?  →  respirar (misma FUNCION relation)"""
+        """heart:pump :: lung:?  →  breathe (same FUNCTION relation)"""
         brain = _make_brain()
-        candidates = brain.analogy_structural("corazon", "latir", "pulmon", min_sim=0.0)
+        candidates = brain.analogy_structural("heart", "pump", "lung", min_sim=0.0)
         self.assertGreaterEqual(len(candidates), 1)
-        self.assertEqual(candidates[0]["d"], "respirar")
-        self.assertEqual(candidates[0]["relation"], "FUNCION")
+        self.assertEqual(candidates[0]["d"], "breathe")
+        self.assertEqual(candidates[0]["relation"], "FUNCTION")
 
     def test_funcion_analogy_profession(self):
-        """medico:curar :: maestro:?  →  enseñar"""
+        """doctor:heal :: teacher:?  →  teach"""
         brain = _make_brain()
-        candidates = brain.analogy_structural("medico", "curar", "maestro", min_sim=0.0)
+        candidates = brain.analogy_structural("doctor", "heal", "teacher", min_sim=0.0)
         self.assertGreaterEqual(len(candidates), 1)
-        self.assertEqual(candidates[0]["d"], "enseñar")
+        self.assertEqual(candidates[0]["d"], "teach")
 
     def test_causa_analogy(self):
-        """fuego:calor :: sol:?  →  luz"""
+        """fire:heat :: sun:?  →  light"""
         brain = _make_brain()
-        candidates = brain.analogy_structural("fuego", "calor", "sol", min_sim=0.0)
+        candidates = brain.analogy_structural("fire", "heat", "sun", min_sim=0.0)
         self.assertGreaterEqual(len(candidates), 1)
-        self.assertEqual(candidates[0]["d"], "luz")
+        self.assertEqual(candidates[0]["d"], "light")
 
     def test_causa_analogy_lluvia(self):
-        """lluvia:rio_crece :: viento:?  →  erosion"""
+        """rain:grow :: wind:?  →  erosion"""
         brain = _make_brain()
-        candidates = brain.analogy_structural("lluvia", "rio_crece", "viento", min_sim=0.0)
+        candidates = brain.analogy_structural("rain", "grow", "wind", min_sim=0.0)
         self.assertGreaterEqual(len(candidates), 1)
         self.assertEqual(candidates[0]["d"], "erosion")
 
     def test_parte_de_analogy(self):
-        """corazon:cuerpo :: cabeza:?  →  cuerpo (misma relacion PARTE_DE)"""
+        """heart:body :: head:?  →  body (same PART_OF relation)"""
         brain = _make_brain()
-        candidates = brain.analogy_structural("corazon", "cuerpo", "cabeza", min_sim=0.0)
+        candidates = brain.analogy_structural("heart", "body", "head", min_sim=0.0)
         self.assertGreaterEqual(len(candidates), 1)
-        self.assertEqual(candidates[0]["d"], "cuerpo")
+        self.assertEqual(candidates[0]["d"], "body")
 
     def test_multiple_candidates_top5(self):
-        """top_k=5 devuelve varios candidatos ordenados"""
+        """top_k=5 returns several ordered candidates"""
         brain = _make_brain()
-        candidates = brain.analogy_structural("corazon", "latir", "pulmon", top_k=5, min_sim=0.0)
+        candidates = brain.analogy_structural("heart", "pump", "lung", top_k=5, min_sim=0.0)
         self.assertLessEqual(len(candidates), 5)
         self.assertGreaterEqual(len(candidates), 1)
 
     def test_unknown_concept_returns_empty(self):
         brain = _make_brain()
-        candidates = brain.analogy_structural("xyz", "abc", "pulmon")
+        candidates = brain.analogy_structural("xyz", "abc", "lung")
         self.assertEqual(len(candidates), 0)
 
     def test_no_relation_between_ab(self):
-        """Si A-B no tiene relacion directa, devuelve vacio"""
+        """If A-B has no direct relation, returns empty"""
         brain = _make_brain()
-        candidates = brain.analogy_structural("corazon", "cuerpo", "pulmon", min_sim=0.0)
-        # corazon->cuerpo is PARTE_DE, pulmon->organo is IS_A, no match
-        # but pulmon->respirar is FUNCION, so the direct relation IS_A won't match PARTE_DE
+        candidates = brain.analogy_structural("heart", "body", "lung", min_sim=0.0)
+        # heart->body is PART_OF, lung->organ is IS_A, no match
         self.assertEqual(len(candidates), 0)
 
     def test_structural_score_fields(self):
-        """Cada candidato incluye structural_score y embedding_score"""
+        """Each candidate includes structural_score and embedding_score"""
         brain = _make_brain()
-        candidates = brain.analogy_structural("corazon", "latir", "pulmon", min_sim=0.0)
+        candidates = brain.analogy_structural("heart", "pump", "lung", min_sim=0.0)
         self.assertIn("structural_score", candidates[0])
         self.assertIn("embedding_score", candidates[0])
         self.assertGreater(candidates[0]["structural_score"], 0)
 
     def test_analogy_structural_increments_usage(self):
-        """Inference usage se incrementa en sinapsis recorridas"""
+        """Inference usage incremented on traversed synapses"""
         brain = _make_brain()
         syn_before = sum(s.inference_usage for s in brain.synapses.values())
-        candidates = brain.analogy_structural("corazon", "latir", "pulmon", min_sim=0.0)
+        candidates = brain.analogy_structural("heart", "pump", "lung", min_sim=0.0)
         syn_after = sum(s.inference_usage for s in brain.synapses.values())
         self.assertGreater(syn_after, syn_before)
 

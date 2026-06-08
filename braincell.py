@@ -440,10 +440,22 @@ class Brain:
         if not ab_rels:
             return results
 
-        # 2. Extract neighborhoods for structural alignment
-        neigh_c = self._extract_neighborhood(cell_c, hops)
+        # 2. Pre-compute outgoing relation patterns for A, B, C (don't depend on D)
+        def _out_pattern(cell):
+            pat = {}
+            for syn in cell.synapses_out:
+                if syn.relation:
+                    pat[syn.relation] = pat.get(syn.relation, 0) + 1
+            return pat
 
-        # 3. For each candidate D reachable from C with same relation
+        a_pattern = _out_pattern(cell_a)
+        b_pattern = _out_pattern(cell_b)
+        c_pattern = _out_pattern(cell_c)
+
+        match_ac = sum(1 for r in a_pattern if r in c_pattern)
+        total_ac_patterns = max(len(a_pattern) + len(c_pattern), 1)
+
+        # 3. For each candidate D reachable from C with matching relation
         for csyn in cell_c.synapses_out:
             if csyn.relation not in ab_rels:
                 continue
@@ -453,49 +465,26 @@ class Brain:
             d_cell = csyn.target
             csyn.inference_usage += 1
 
-            # ---------- Compute structural score ----------
-            # 3a. Compare outgoing relation patterns of A vs C
-            a_pattern = {}
-            for syn in cell_a.synapses_out:
-                if syn.relation:
-                    a_pattern[syn.relation] = a_pattern.get(syn.relation, 0) + 1
-
-            c_pattern = {}
-            for syn in cell_c.synapses_out:
-                if syn.relation:
-                    c_pattern[syn.relation] = c_pattern.get(syn.relation, 0) + 1
-
-            match_ac = sum(1 for r in a_pattern if r in c_pattern)
-            total_ac_patterns = max(len(a_pattern) + len(c_pattern), 1)
-
-            # 3b. Compare outgoing relation patterns of B vs D
-            b_pattern = {}
-            for syn in cell_b.synapses_out:
-                if syn.relation:
-                    b_pattern[syn.relation] = b_pattern.get(syn.relation, 0) + 1
-
-            d_pattern = {}
-            for syn in d_cell.synapses_out:
-                if syn.relation:
-                    d_pattern[syn.relation] = d_pattern.get(syn.relation, 0) + 1
-
+            # 3a. B vs D outgoing pattern overlap
+            d_pattern = _out_pattern(d_cell)
             match_bd = sum(1 for r in b_pattern if r in d_pattern)
             total_bd_patterns = max(len(b_pattern) + len(d_pattern), 1)
-
-            # 3c. Structure score: overlapping relation types
             structural_score = (match_ac / total_ac_patterns + match_bd / total_bd_patterns) / 2.0
 
-            # 3d. Embedding similarity for mapped nodes
-            emb_b_d = self.embedding_bridge.similarity(b, d_cell.word) if b and d_cell.word else 0.0
-            emb_a_c = self.embedding_bridge.similarity(a, c) if a and c else 0.0
+            # 3b. Embedding similarity
+            emb_b_d = 0.0
+            emb_a_c = 0.0
+            if self.embedding_bridge is not None:
+                emb_b_d = self.embedding_bridge.similarity(b, d_cell.word) if b and d_cell.word else 0.0
+                emb_a_c = self.embedding_bridge.similarity(a, c) if a and c else 0.0
             emb_score = (emb_b_d + emb_a_c) / 2.0
-
-            # 3e. Final score: weighted combination
-            score = structural_score * 0.5 + emb_score * 0.3
-            score += (csyn.strength / max(csyn.cost, 0.001)) * 0.2
 
             if emb_score < min_sim:
                 continue
+
+            # 3c. Final score: weighted combination
+            score = structural_score * 0.5 + emb_score * 0.3
+            score += (csyn.strength / max(csyn.cost, 0.001)) * 0.2
 
             results.append({
                 "d": d_cell.word,

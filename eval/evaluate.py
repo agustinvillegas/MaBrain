@@ -1,4 +1,5 @@
 import json
+import random
 import sys
 import time
 from collections import defaultdict
@@ -8,7 +9,7 @@ sys.path.insert(0, ".")
 from braincell import Brain
 
 
-def build_benchmark_from_graph(brain):
+def build_benchmark_from_graph(brain, max_analogies=None, max_per_relation=500):
 
     by_relation = defaultdict(list)
 
@@ -31,8 +32,12 @@ def build_benchmark_from_graph(brain):
         if len(pairs) < 2:
             continue
 
-        for i, p1 in enumerate(pairs):
-            for j, p2 in enumerate(pairs):
+        shuffled = pairs[:]
+        random.shuffle(shuffled)
+        count = 0
+
+        for i, p1 in enumerate(shuffled):
+            for j, p2 in enumerate(shuffled):
                 if i == j:
                     continue
 
@@ -45,6 +50,14 @@ def build_benchmark_from_graph(brain):
                     "a_b": (p1["from"], p1["to"]),
                     "c_d": (p2["from"], p2["to"])
                 })
+                count += 1
+                if max_per_relation and count >= max_per_relation:
+                    break
+            if max_per_relation and count >= max_per_relation:
+                break
+
+        if max_analogies is not None and len(analogies) >= max_analogies:
+            break
 
     return analogies
 
@@ -103,11 +116,16 @@ def run_ma_brain(brain, analogies):
     }
 
 
-STRUCTURAL_RELATIONS = {"CAUSA", "FUNCION", "PARTE_DE", "INSTRUMENTO", "UBICADO_EN",
-                        "EFECTO_DE", "FUNCION_DE", "TIENE_PARTE", "CONTIENE"}
+STRUCTURAL_RELATIONS = {
+    "CAUSE", "FUNCTION", "PART_OF", "INSTRUMENT", "LOCATED_IN",
+    "EFFECT_OF", "FUNCTION_OF", "CONTAINS", "CONTAINED_IN",
+    "USED_FOR", "OPPOSITE", "SIMILAR_TO", "HAS_PROPERTY", "PROPERTY_OF",
+    "SYMBOL_OF", "SYMBOLIZED_BY",
+    "MADE_OF", "DESIRES", "AVOIDS",
+}
 
 
-def build_benchmark_structural(brain):
+def build_benchmark_structural(brain, max_analogies=None):
     """Genera analogías solo para relaciones estructurales (CAUSA, FUNCION, etc.)."""
 
     by_relation = {}
@@ -122,11 +140,14 @@ def build_benchmark_structural(brain):
         })
 
     analogies = []
+    total = 0
     for rel, pairs in by_relation.items():
         if len(pairs) < 2:
             continue
-        for i, p1 in enumerate(pairs):
-            for j, p2 in enumerate(pairs):
+        shuffled = pairs[:]
+        random.shuffle(shuffled)
+        for i, p1 in enumerate(shuffled):
+            for j, p2 in enumerate(shuffled):
                 if i == j:
                     continue
                 analogies.append({
@@ -134,6 +155,9 @@ def build_benchmark_structural(brain):
                     "c": p2["from"], "d": p2["to"],
                     "relation": rel,
                 })
+                total += 1
+                if max_analogies is not None and total >= max_analogies:
+                    return analogies
 
     return analogies
 
@@ -247,7 +271,7 @@ def main():
         print(f"  Ahora: {n_relations} sinapsis con relacion")
     print()
 
-    analogies = build_benchmark_from_graph(brain)
+    analogies = build_benchmark_from_graph(brain, max_per_relation=500)
     print(f"  Benchmark generado: {len(analogies)} analogias")
     rels = set(a["relation"] for a in analogies)
     print(f"  Relaciones: {sorted(rels)}")

@@ -1,12 +1,12 @@
+"""Podar sinapsis guiada por embeddings (MiniLM-L6-v2 + char-n-gram)."""
 import argparse
 from braincell import Brain
 from embedding_bridge import EmbeddingBridge
 
 def main():
     parser = argparse.ArgumentParser(description="Podar sinapsis guiada por embeddings")
-    parser.add_argument("--load", default="states/brain_state_v6_evaled.json", help="Estado del cerebro a cargar")
-    parser.add_argument("--save", default="states/brain_state_v6_pruned.json", help="Archivo de salida")
-    parser.add_argument("--embedding-model", default="models/cc.es.300.bin", help="Modelo FastText")
+    parser.add_argument("--load", default="states/brain_state_v7_en_evaled.json", help="Estado del cerebro a cargar")
+    parser.add_argument("--save", default="states/brain_state_v7_en_pruned.json", help="Archivo de salida")
     parser.add_argument("--min-usage", type=int, default=0, help="Uso mínimo (0 = ignorar uso)")
     parser.add_argument("--min-sim", type=float, default=0.3, help="Similitud semántica mínima (default: 0.3)")
     args = parser.parse_args()
@@ -15,8 +15,8 @@ def main():
     brain = Brain()
     brain.load(args.load)
 
-    print(f"Cargando modelo de embeddings desde {args.embedding_model}...")
-    bridge = EmbeddingBridge(model_path=args.embedding_model)
+    print("Cargando bridge de embeddings (MiniLM-L6-v2 lazy)...")
+    bridge = EmbeddingBridge()
 
     total = len(brain.synapses)
     to_remove = []
@@ -33,7 +33,6 @@ def main():
 
     for syn_id in to_remove:
         syn = brain.synapses[syn_id]
-        # Remove from cell lists
         if syn in syn.origin.synapses_out:
             syn.origin.synapses_out.remove(syn)
         if syn in syn.target.synapses_in:

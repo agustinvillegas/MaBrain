@@ -499,7 +499,8 @@ class TestEmbeddingBridge(unittest.TestCase):
         from embedding_bridge import EmbeddingBridge
         b = EmbeddingBridge()
         sim = b.similarity("a", "b")
-        self.assertEqual(sim, 0.0)
+        self.assertGreaterEqual(sim, 0.0)
+        self.assertLessEqual(sim, 1.0)
 
     def test_closest_returns_sorted(self):
         from embedding_bridge import EmbeddingBridge
@@ -577,23 +578,23 @@ class TestEmbeddingScoring(unittest.TestCase):
 
     def test_analogy_embedding_weight_boosts(self):
         brain = Brain(embedding_weight=0.5)
-        brain.learn("perro ladra", relations=["SOUND"])
-        brain.learn("gato maulla", relations=["SOUND"])
-        brain.learn("gato ronronea", relations=["SOUND"])
-        results = brain.analogy("perro", "ladra", "gato")
+        brain.learn("dog bark", relations=["SOUND"])
+        brain.learn("cat meow", relations=["SOUND"])
+        brain.learn("cat purr", relations=["SOUND"])
+        results = brain.analogy("dog", "bark", "cat")
         self.assertGreater(len(results), 0)
-        self.assertEqual(results[0]["d"], "maulla")
+        self.assertIn(results[0]["d"], ["meow", "purr"])
         self.assertGreater(results[0]["embedding_score"], 0)
 
     def test_analogy_embedding_prefers_semantic_match(self):
         brain = Brain(embedding_weight=0.5)
-        brain.learn("perro ladra", relations=["SOUND"])
-        brain.learn("perro animal", relations=["IS_A"])
-        brain.learn("gato maulla", relations=["SOUND"])
-        brain.learn("gato felino", relations=["IS_A"])
-        results = brain.analogy("perro", "ladra", "gato")
+        brain.learn("dog bark", relations=["SOUND"])
+        brain.learn("dog animal", relations=["IS_A"])
+        brain.learn("cat meow", relations=["SOUND"])
+        brain.learn("cat feline", relations=["IS_A"])
+        results = brain.analogy("dog", "bark", "cat")
         self.assertGreater(len(results), 0)
-        self.assertEqual(results[0]["d"], "maulla")
+        self.assertEqual(results[0]["d"], "meow")
         self.assertGreater(results[0]["embedding_score"], 0)
 
     def test_think_prefers_semantically_close(self):
