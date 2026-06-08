@@ -315,20 +315,22 @@ class TestPrune(unittest.TestCase):
 
 class TestWorkingMemory(unittest.TestCase):
 
-    def test_think_clears_and_populates_working_memory(self):
+    def test_think_populates_working_memory(self):
         brain = Brain()
         brain.learn("a b c d")
         start = brain.get_or_create_cell("a")
-        brain.think(start, steps=3, temperature=0, use_working_memory=True)
-        self.assertGreater(len(brain.working_memory), 0)
+        brain.think(start, steps=3, temperature=0, track_in_wm=True)
+        active = brain.wm.get_active_entities(min_salience=0.01)
+        self.assertGreater(len(active), 0)
 
     def test_working_memory_has_concepts(self):
         brain = Brain()
         brain.learn("a b c")
         start = brain.get_or_create_cell("a")
-        brain.think(start, steps=3, temperature=0, use_working_memory=True)
-        self.assertIn("b", brain.working_memory)
-        self.assertIn("c", brain.working_memory)
+        brain.think(start, steps=3, temperature=0, track_in_wm=True)
+        active = brain.wm.get_active_entities(min_salience=0.01)
+        self.assertIn("b", active)
+        self.assertIn("c", active)
 
 
 class TestLearnWithRelations(unittest.TestCase):

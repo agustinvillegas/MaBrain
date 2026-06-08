@@ -579,6 +579,26 @@ def main(output_path):
         "root":"absorb_water","leaf":"photosynthesize","fruit":"ripen",
         "cactus":"store_water","fern":"spore","moss":"cover_ground",
         "vine":"climb","weed":"spread","grass":"cover_soil",
+        # additional
+        "water":"flow","river":"flow","wind":"blow",
+        "cloud":"float","bird":"fly_bird","fish":"swim",
+        "snake":"slither","rabbit":"hop","kangaroo":"jump",
+        "lamp":"illuminate","clock":"tell_time",
+        "mirror":"reflect","sponge":"absorb_water",
+        "chain":"bind","spring":"stretch",
+        "pump":"move_fluid","valve":"control_flow",
+        "filter":"purify","trap":"catch",
+        "wheel":"roll","axle":"support_rotation",
+        "nail":"fasten","screw":"fasten",
+        "belt":"hold_pants","zipper":"close",
+        "button":"fasten_clothing","string":"tie",
+        "roof":"shelter","wall":"separate_room",
+        "column":"support_load","foundation":"support_building",
+        "memory":"remember","imagination":"create_ideas",
+        "faith":"believe","hope":"trust_future",
+        "law":"govern","money":"buy_things",
+        "price":"determine_value","name":"identify",
+        "question":"seek_answer","answer":"provide_knowledge",
     }
     for agent, action in function_agents.items():
         if agent in ALL_WORDS and action in ALL_WORDS:
@@ -649,6 +669,19 @@ def main(output_path):
         ("algorithm","automation"),("automation","efficiency"),
         ("software","computation"),("network","connectivity"),
         ("hardware","performance"),("encryption","security"),
+        # nature → effect (additional)
+        ("sun","warmth"),("moon","tide"),("fire","smoke"),
+        ("flower","nectar"),("tree","shade"),("food","growth"),
+        ("water","life"),("wind","sound"),("rain","mud"),
+        ("volcano","ash"),("earthquake","tsunami"),
+        ("laughter","joy"),("cry","sadness"),
+        ("sleep","dream"),("music","dance"),
+        ("running","speed"),("swimming","exercise"),
+        ("cooking","food"),("reading","imagination"),
+        ("painting","art"),("teaching","learning"),
+        ("truth","trust"),("courage","strength"),
+        ("education","knowledge"),("wealth","comfort"),
+        ("poverty","suffering"),("technology","progress"),
     ]
     for a,b in cause_pairs:
         if a in ALL_WORDS and b in ALL_WORDS:
@@ -810,6 +843,30 @@ def main(output_path):
         ("rain","sky"),("snow","sky"),("cloud","sky"),
         ("fog","city"),("smoke","chimney"),
         ("rainbow","sky"),("aurora","sky"),
+        # more nature
+        ("sun","horizon"),("moon","night"),("star","night"),
+        ("river","valley"),("lake","mountain"),
+        ("cloud","sky"),("rain","sky"),("snow","mountain"),
+        # more people
+        ("customer","store"),("patient","clinic"),
+        ("student","university"),("audience","theater"),
+        ("tourist","country"),
+        # more objects
+        ("wallet","pocket"),("keys","door"),
+        ("pencil","desk"),("lamp","room"),("carpet","floor"),
+        ("picture","wall"),("bed","bedroom"),
+        ("sofa","living_room"),
+        # more transportation
+        ("car","road"),("train","track"),
+        ("bicycle","path"),("truck","highway"),
+        ("bus","city"),("boat","dock"),
+        # more institutions
+        ("justice","court"),("freedom","country"),
+        ("truth","book"),("wisdom","experience"),
+        # more animals
+        ("snake","grass"),("mouse","field"),
+        ("owl","tree"),("bat","cave"),("rabbit","meadow"),
+        ("crocodile","river"),
     ]
     for a,b in loc_pairs:
         if a in ALL_WORDS and b in ALL_WORDS:
@@ -934,6 +991,27 @@ def main(output_path):
         ("connect","disconnect"),("attach","detach"),
         ("tie","untie"),("fasten","loosen"),
         ("lock","unlock"),("tune","detune"),
+        # natural opposites
+        ("sun","moon"),("land","sea"),("sky","ground"),
+        ("mountain","valley"),("hill","plain"),("river","land"),
+        ("north","south"),("east","west"),("left","right"),
+        ("summer","winter"),("spring","autumn"),
+        # state opposites
+        ("beginning","end"),("source","mouth"),
+        ("question","answer"),("problem","solution"),
+        ("cause","effect"),("parent","child"),
+        ("teacher","student"),("doctor","patient"),
+        ("seller","buyer"),("giver","receiver"),
+        # quality opposites
+        ("beautiful","ugly"),("intelligent","stupid"),
+        ("polite","rude"),("honest","dishonest"),
+        ("lazy","hardworking"),("selfish","generous"),
+        # action opposites
+        ("speak","silence"),("run","rest"),
+        ("laugh","cry"),("give","keep"),
+        ("find","lose"),("help","hinder"),
+        ("hide","seek"),("throw","catch"),
+        ("build","destroy"),("gather","scatter"),
     ]
     for a,b in opp_pairs:
         if a in ALL_WORDS and b in ALL_WORDS:
@@ -1040,7 +1118,8 @@ def main(output_path):
     ]
     for a,t,act in instrument_triplets:
         if a in ALL_WORDS and t in ALL_WORDS and act in ALL_WORDS:
-            all_seqs.append({"sequence": [a,t,act], "relations": [INSTRUMENT, NEXT]})
+            all_seqs.append({"sequence": [a, t], "relations": [INSTRUMENT]})
+            all_seqs.append({"sequence": [t, act], "relations": [USED_FOR]})
 
     # 9. Chains (NEXT): reduced — just enough for sequential context
     domain_lists = [ANIMALS, BIRDS, FISH, REPTILES, INSECTS, PLANTS, VEGETABLES,
@@ -1143,6 +1222,30 @@ def main(output_path):
         # utility
         ("knife","useful"),("phone","useful"),
         ("internet","useful"),("education","valuable"),
+        # more animals
+        ("ox","strong"),("donkey","stubborn"),
+        ("owl","wise"),("dove","peaceful"),
+        ("wolf","cunning"),("sheep","gentle"),
+        ("eagle","majestic"),("lion","majestic"),
+        # more objects
+        ("wool","warm"),("cotton","soft"),
+        ("leather","durable"),("stone","heavy"),
+        ("bronze","strong"),("silver","shiny"),
+        ("wood","hard"),("copper","conductive"),
+        ("sand","rough"),("mud","wet"),
+        # more geography
+        ("ocean","blue"),("forest","green"),
+        ("desert","hot"),("river","long"),
+        ("lake","calm"),("volcano","explosive"),
+        ("cave","dark"),("mountain","rocky"),
+        # more abstract
+        ("love","strong"),("hate","powerful"),
+        ("fear","paralyzing"),("hope","uplifting"),
+        ("life","precious"),("death","certain"),
+        # more human traits
+        ("child","curious"),("elder","wise"),
+        ("baby","innocent"),("soldier","brave"),
+        ("artist","creative"),("scientist","curious"),
     ]
     for a,b in property_pairs:
         if a in ALL_WORDS and b in ALL_WORDS:

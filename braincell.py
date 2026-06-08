@@ -2,8 +2,8 @@ import json
 import math
 import random
 import uuid
-from collections import deque
 from embedding_bridge import EmbeddingBridge
+from working_memory import WorkingMemory
 
 
 class Braincell:
@@ -60,10 +60,8 @@ class Brain:
         self.cells = {}
         self.synapses = {}
         self.concept_registry = {}
-        self.working_memory = deque(maxlen=5)
-
+        self.wm = WorkingMemory()
         self.thoughts = []
-
         self.embedding_bridge = embedding_bridge or EmbeddingBridge()
         self.embedding_weight = embedding_weight
 
@@ -283,23 +281,17 @@ class Brain:
         return eff
 
 
-    def think(self, start_cell, steps=10, temperature=None, epsilon=0.0, use_working_memory=False):
+    def think(self, start_cell, steps=10, temperature=None, epsilon=0.0, track_in_wm=False):
 
         current = start_cell
-
-        self.working_memory.clear()
-
         result = []
-
 
         for i in range(steps):
 
             if len(current.synapses_out) == 0:
                 break
 
-
             options = current.synapses_out
-
 
             choice = self._select_synapse(
                 options,
@@ -307,7 +299,6 @@ class Brain:
                 epsilon=epsilon,
                 context=current.word
             )
-
 
             result.append(choice.concept)
 
@@ -317,8 +308,8 @@ class Brain:
             choice.target.thought_trace += choice.strength
             current = choice.target
 
-            if use_working_memory:
-                self.working_memory.append(current.word)
+            if track_in_wm and current.word:
+                self.wm.activate_entity(current.word, salience=0.5)
 
         thought = " ".join(result)
 
@@ -611,6 +602,63 @@ class Brain:
                 syn.relation = "NEXT"
 
 
+    def _extract_entities(self, text):
+        words = text.lower().split()
+        entities = []
+        seen = set()
+        for w in words:
+            w_clean = w.strip(".,!?;:'\"()[]{}")
+            if w_clean in self.concept_registry and w_clean not in seen:
+                entities.append(w_clean)
+                seen.add(w_clean)
+        return entities
+
+    def get_response(self, user_text, temperature=None, steps=10, epsilon=0.0):
+        # 1. Extract entities, ingest user turn
+        entities = self._extract_entities(user_text)
+        self.wm.ingest(role="user", message=user_text, entities=entities)
+
+        # 2. Activate entities in graph + WM
+        start_word = None
+        for ent in entities:
+            cell_id = self.concept_registry.get(ent)
+            if cell_id:
+                self.cells[cell_id].activation += 1.0
+            self.wm.activate_entity(ent, salience=1.0)
+            if start_word is None:
+                start_word = ent
+
+        # 3. If no known entity, pick most salient from active_entities
+        if not start_word:
+            active = self.wm.get_active_entities(min_salience=0.3)
+            if active:
+                start_word = active[0]
+
+        # 4. If still nothing, respond with repr
+        if not start_word:
+            return "I don't know what to say."
+
+        # 5. Resolve to cell
+        start_cell = self.get_or_create_cell(start_word, fuzzy=True)
+
+        # 6. Generate
+        thought = self.think(start_cell, steps=steps, temperature=temperature,
+                             epsilon=epsilon, track_in_wm=True)
+
+        # 7. Post-process into reply: use the thought as-is for now
+        response = thought if thought else start_word
+
+        # 8. Ingest bot turn
+        resp_entities = self._extract_entities(response)
+        self.wm.ingest(role="bot", message=response, entities=resp_entities, thought=thought)
+
+        # 9. Decay activations
+        self.wm.decay_entities()
+        for cell in self.cells.values():
+            cell.activation *= 0.85
+
+        return response
+
     def save(self, filename="states/brain_state.json"):
 
 
@@ -620,7 +668,9 @@ class Brain:
 
             "synapses": {},
 
-            "thoughts": self.thoughts
+            "thoughts": self.thoughts,
+
+            "working_memory": self.wm.to_dict(),
 
         }
 
@@ -726,3 +776,7 @@ class Brain:
             "thoughts",
             []
         )
+
+        wm_data = data.get("working_memory")
+        if wm_data:
+            self.wm.from_dict(wm_data)

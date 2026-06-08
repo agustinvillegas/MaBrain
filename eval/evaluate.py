@@ -124,9 +124,30 @@ STRUCTURAL_RELATIONS = {
     "MADE_OF", "DESIRES", "AVOIDS",
 }
 
+# Inverse map: if A→B relation=R, what's the reverse?
+INVERSE_RELATIONS = {
+    "CAUSE": "EFFECT_OF",
+    "EFFECT_OF": "CAUSE",
+    "FUNCTION": "FUNCTION_OF",
+    "FUNCTION_OF": "FUNCTION",
+    "PART_OF": "CONTAINS",
+    "CONTAINS": "PART_OF",
+    "LOCATED_IN": "CONTAINED_IN",
+    "CONTAINED_IN": "LOCATED_IN",
+    "HAS_PROPERTY": "PROPERTY_OF",
+    "PROPERTY_OF": "HAS_PROPERTY",
+    "INSTRUMENT": "USED_FOR",
+    "USED_FOR": "INSTRUMENT",
+    "SYMBOL_OF": "SYMBOLIZED_BY",
+    "SYMBOLIZED_BY": "SYMBOL_OF",
+    "MADE_OF": "MATERIAL_OF",
+    "OPPOSITE": "OPPOSITE",
+    "SIMILAR_TO": "SIMILAR_TO",
+}
 
-def build_benchmark_structural(brain, max_analogies=None):
-    """Genera analogías solo para relaciones estructurales (CAUSA, FUNCION, etc.)."""
+
+def build_benchmark_structural(brain, max_analogies=None, max_per_relation=200):
+    """Genera analogías solo para relaciones estructurales, con muestreo por relación."""
 
     by_relation = {}
     for syn in brain.synapses.values():
@@ -140,12 +161,12 @@ def build_benchmark_structural(brain, max_analogies=None):
         })
 
     analogies = []
-    total = 0
     for rel, pairs in by_relation.items():
         if len(pairs) < 2:
             continue
         shuffled = pairs[:]
         random.shuffle(shuffled)
+        count = 0
         for i, p1 in enumerate(shuffled):
             for j, p2 in enumerate(shuffled):
                 if i == j:
@@ -155,9 +176,13 @@ def build_benchmark_structural(brain, max_analogies=None):
                     "c": p2["from"], "d": p2["to"],
                     "relation": rel,
                 })
-                total += 1
-                if max_analogies is not None and total >= max_analogies:
-                    return analogies
+                count += 1
+                if max_per_relation and count >= max_per_relation:
+                    break
+            if max_per_relation and count >= max_per_relation:
+                break
+        if max_analogies is not None and len(analogies) >= max_analogies:
+            break
 
     return analogies
 
@@ -193,6 +218,7 @@ def run_ma_brain_structural(brain, analogies, hops=2, min_sim=0.1):
             "top5": top5,
             "correct": top1 == d,
             "in_top5": d in top5,
+            "relation": item.get("relation"),
             "structural_score": candidates[0]["structural_score"] if candidates else 0,
         })
 
