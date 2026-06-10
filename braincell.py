@@ -55,7 +55,7 @@ class Synapse:
 class Brain:
 
 
-    def __init__(self, embedding_bridge=None, embedding_weight=0.0):
+    def __init__(self, embedding_bridge=None, embedding_weight=0.0, structural_weight=0.0):
 
         self.cells = {}
         self.synapses = {}
@@ -64,6 +64,7 @@ class Brain:
         self.thoughts = []
         self.embedding_bridge = embedding_bridge or EmbeddingBridge()
         self.embedding_weight = embedding_weight
+        self.structural_weight = structural_weight
 
 
     def _resolve_concept(self, concept, min_score=0.1):
@@ -602,15 +603,53 @@ class Brain:
                 syn.relation = "NEXT"
 
 
+    STOP_WORDS = frozenset({
+        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+        "have", "has", "had", "do", "does", "did", "will", "would", "can",
+        "could", "shall", "should", "may", "might", "must", "to", "of", "in",
+        "for", "on", "with", "at", "by", "from", "as", "into", "through",
+        "during", "before", "after", "above", "below", "between", "about",
+        "up", "down", "out", "off", "over", "under", "again", "further",
+        "then", "once", "here", "there", "when", "where", "why", "how",
+        "all", "each", "every", "both", "few", "more", "most", "some", "any",
+        "no", "not", "only", "own", "same", "so", "than", "too", "very",
+        "just", "because", "also", "but", "and", "or", "if", "while", "what",
+        "which", "who", "whom", "this", "that", "these", "those", "it", "its",
+        "i", "me", "my", "we", "our", "you", "your", "he", "him", "his",
+        "she", "her", "they", "them", "their", "tell", "ask", "please", "yes",
+    })
+
     def _extract_entities(self, text):
         words = text.lower().split()
         entities = []
         seen = set()
         for w in words:
             w_clean = w.strip(".,!?;:'\"()[]{}")
+            if w_clean in self.STOP_WORDS or len(w_clean) <= 2:
+                continue
             if w_clean in self.concept_registry and w_clean not in seen:
                 entities.append(w_clean)
                 seen.add(w_clean)
+                continue
+            # Try fuzzy match (read-only) for singular/plural etc.
+            found = self.embedding_bridge.closest_cell_word(
+                w_clean, self, top_k=1, min_score=0.5
+            )
+            if found:
+                fw = found[0] if isinstance(found, (list, tuple)) else found
+                if fw not in seen and abs(len(fw) - len(w_clean)) <= 2:
+                    # Prevent false positives like 'hello' -> 'cello':
+                    # require a common prefix of at least min_len-1 chars
+                    min_len = min(len(fw), len(w_clean))
+                    common_prefix = 0
+                    for a, b in zip(fw, w_clean):
+                        if a == b:
+                            common_prefix += 1
+                        else:
+                            break
+                    if common_prefix >= min_len - 1:
+                        entities.append(fw)
+                        seen.add(fw)
         return entities
 
     def get_response(self, user_text, temperature=None, steps=10, epsilon=0.0):
@@ -619,40 +658,22 @@ class Brain:
         self.wm.ingest(role="user", message=user_text, entities=entities)
 
         # 2. Activate entities in graph + WM
-        start_word = None
         for ent in entities:
             cell_id = self.concept_registry.get(ent)
             if cell_id:
                 self.cells[cell_id].activation += 1.0
             self.wm.activate_entity(ent, salience=1.0)
-            if start_word is None:
-                start_word = ent
 
-        # 3. If no known entity, pick most salient from active_entities
-        if not start_word:
-            active = self.wm.get_active_entities(min_salience=0.3)
-            if active:
-                start_word = active[0]
+        # 3. Delegate to DialogueManager for intent/strategy/response
+        from dialogue_manager import DialogueManager
+        dm = DialogueManager(self)
+        response = dm.respond(user_text)
 
-        # 4. If still nothing, respond with repr
-        if not start_word:
-            return "I don't know what to say."
-
-        # 5. Resolve to cell
-        start_cell = self.get_or_create_cell(start_word, fuzzy=True)
-
-        # 6. Generate
-        thought = self.think(start_cell, steps=steps, temperature=temperature,
-                             epsilon=epsilon, track_in_wm=True)
-
-        # 7. Post-process into reply: use the thought as-is for now
-        response = thought if thought else start_word
-
-        # 8. Ingest bot turn
+        # 4. Ingest bot turn
         resp_entities = self._extract_entities(response)
-        self.wm.ingest(role="bot", message=response, entities=resp_entities, thought=thought)
+        self.wm.ingest(role="bot", message=response, entities=resp_entities, thought=response)
 
-        # 9. Decay activations
+        # 5. Decay activations
         self.wm.decay_entities()
         for cell in self.cells.values():
             cell.activation *= 0.85
@@ -671,6 +692,10 @@ class Brain:
             "thoughts": self.thoughts,
 
             "working_memory": self.wm.to_dict(),
+
+            "embedding_weight": self.embedding_weight,
+
+            "structural_weight": self.structural_weight,
 
         }
 
@@ -780,3 +805,6 @@ class Brain:
         wm_data = data.get("working_memory")
         if wm_data:
             self.wm.from_dict(wm_data)
+
+        self.embedding_weight = data.get("embedding_weight", self.embedding_weight)
+        self.structural_weight = data.get("structural_weight", self.structural_weight)

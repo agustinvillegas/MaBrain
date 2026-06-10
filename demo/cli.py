@@ -11,15 +11,17 @@ def print_banner():
     print("  MaBrain - CLI interactiva")
     print("  " + "-" * 40)
     print("  comandos:")
-    print("    think <concepto> [pasos]  - caminar el grafo")
-    print("    analogia <a> <b> <c>     - A:B :: C:?")
-    print("    predice <texto> [top_k]  - predecir siguiente")
-    print("    explica <concepto>       - conexiones salientes")
-    print("    entrena [n]              - re-entrenar n epocas")
-    print("    evalua                   - benchmark de analogias")
-    print("    estadisticas             - resumen del grafo")
-    print("    ayuda                    - esta pantalla")
-    print("    salir                    - salir")
+    print("    chat <mensaje>           - responder con WM contextual")
+    print("    wm                       - mostrar memoria de trabajo")
+    print("    think <concepto> [pasos] - caminar el grafo")
+    print("    analogia <a> <b> <c>    - A:B :: C:?")
+    print("    predice <texto> [top_k] - predecir siguiente")
+    print("    explica <concepto>      - conexiones salientes")
+    print("    entrena [n]             - re-entrenar n epocas")
+    print("    evalua                  - benchmark de analogias")
+    print("    estadisticas            - resumen del grafo")
+    print("    ayuda                   - esta pantalla")
+    print("    salir                   - salir")
     print()
 
 
@@ -304,10 +306,47 @@ def cmd_stats(brain, args):
             print(f"    {label}: {len(c.synapses_out)} salidas, {len(c.synapses_in)} entradas")
 
 
+def cmd_chat(brain, args):
+    if not args:
+        print("  uso: chat <mensaje>")
+        return
+    msg = " ".join(args)
+    resp = brain.get_response(msg, steps=8)
+    print(f"  Tu: {msg}")
+    print(f"  Brain: {resp}")
+    # Show WM context summary
+    active = brain.wm.get_active_entities(min_salience=0.1)
+    if active:
+        print(f"  [entidades activas: {', '.join(active[:5])}]")
+    print(f"  [turnos: {len(brain.wm.turns)}]")
+
+
+def cmd_wm(brain, args):
+    print(f"  Memoria de trabajo:")
+    print(f"    Turnos: {len(brain.wm.turns)}/{brain.wm.max_turns}")
+    for t in brain.wm.last_turns(5):
+        roles = {"user": "Tu", "bot": "Brain"}
+        label = roles.get(t.role, t.role)
+        preview = t.message[:60] + ("..." if len(t.message) > 60 else "")
+        ents = f" [{', '.join(t.entities)}]" if t.entities else ""
+        print(f"    {label}: {preview}{ents}")
+    active = brain.wm.get_active_entities(min_salience=0.1)
+    if active:
+        print(f"    Entidades activas: {', '.join(active[:8])}")
+    else:
+        print(f"    Entidades activas: (ninguna)")
+    topic = brain.wm.current_topic()
+    if topic:
+        print(f"    Tema actual: {topic}")
+
+
 def main():
 
     brain = Brain()
-    loaded_path = "states/brain_state.json"
+    # Try v6 pruned first, fallback to default
+    loaded_path = r"D:\ma_brain_data\brain_state_v8_v6_pruned_evaled.json"
+    if not os.path.exists(loaded_path):
+        loaded_path = "states/brain_state.json"
     if os.path.exists(loaded_path):
         brain.load(loaded_path)
         print(f"Cargado: {len(brain.cells)} neuronas, {len(brain.synapses)} sinapsis")
@@ -354,6 +393,10 @@ def main():
             cmd_evaluate(brain, args)
         elif cmd in ("estadisticas", "stats"):
             cmd_stats(brain, args)
+        elif cmd == "chat":
+            cmd_chat(brain, args)
+        elif cmd == "wm":
+            cmd_wm(brain, args)
         else:
             print(f"  ? comando desconocido: '{cmd}' (escribe 'ayuda')")
 
