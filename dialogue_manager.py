@@ -56,9 +56,9 @@ STRATEGY_CONFIG = {
     "EXPLAIN_LOCATION": {"temp": 0.1, "ew": 0.0, "steps": 4, "relations": {"LOCATED_IN"}, "use_analogy": False, "template": None},
     "EXPLAIN_CAUSE":    {"temp": 0.2, "ew": 0.0, "steps": 5, "relations": {"CAUSE"}, "use_analogy": False, "template": None},
     "ANALOGY_SEARCH":   {"temp": 0.0, "ew": 0.0, "steps": 0, "relations": None, "use_analogy": True, "template": None},
-    "CONTINUE_TOPIC":   {"temp": 0.3, "ew": 0.1, "steps": 8, "relations": None, "use_analogy": False, "template": None},
+    "CONTINUE_TOPIC":   {"temp": 0.3, "ew": 0.1, "steps": 8, "relations": None, "use_analogy": False, "template": None, "ctx_bias": 0.3},
     "GREET":            {"temp": 0.0, "ew": 0.0, "steps": 0, "relations": None, "use_analogy": False, "template": "hello"},
-    "EXPLORE":          {"temp": 0.5, "ew": 0.1, "steps": 8, "relations": None, "use_analogy": False, "template": None},
+    "EXPLORE":          {"temp": 0.5, "ew": 0.1, "steps": 8, "relations": None, "use_analogy": False, "template": None, "ctx_bias": 0.2},
 }
 
 # Greeting templates

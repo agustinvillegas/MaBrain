@@ -55,7 +55,8 @@ class Synapse:
 class Brain:
 
 
-    def __init__(self, embedding_bridge=None, embedding_weight=0.0, structural_weight=0.0):
+    def __init__(self, embedding_bridge=None, embedding_weight=0.0, structural_weight=0.0,
+                 context_bias_weight=0.0):
 
         self.cells = {}
         self.synapses = {}
@@ -65,6 +66,7 @@ class Brain:
         self.embedding_bridge = embedding_bridge or EmbeddingBridge()
         self.embedding_weight = embedding_weight
         self.structural_weight = structural_weight
+        self.context_bias_weight = context_bias_weight
 
 
     def _resolve_concept(self, concept, min_score=0.1):
@@ -252,14 +254,14 @@ class Brain:
             temperature = self._dynamic_temperature(options)
 
         if temperature <= 0:
-            return min(options, key=lambda x: self._embedding_cost(x, context))
+            return max(options, key=lambda s: self._synapse_score(s, context))
 
         if random.random() < epsilon:
             return random.choice(options)
 
-        costs = [self._embedding_cost(s, context) for s in options]
-        max_cost = max(costs)
-        weights = [math.exp(-(c - max_cost) / temperature) for c in costs]
+        scores = [self._synapse_score(s, context) for s in options]
+        max_score = max(scores)
+        weights = [math.exp((sc - max_score) / temperature) for sc in scores]
 
         total = sum(weights)
         if total <= 0:
@@ -273,13 +275,28 @@ class Brain:
                 return options[i]
         return options[-1]
 
-    def _embedding_cost(self, synapse, context=None):
+    def _context_bias(self, synapse):
+        """Bias contextual de WM: entidades activas + topic stack.
+        Retorna ≥ 0. Escalado por context_bias_weight."""
+        if self.context_bias_weight <= 0 or not synapse.target.word:
+            return 0.0
+        bias = 0.0
+        wm_salience = self.wm.active_entities.get(synapse.target.word, 0.0)
+        bias += wm_salience
+        for i, topic in enumerate(reversed(self.wm.topic_stack)):
+            if topic == synapse.target.word:
+                bias += 1.0 / (i + 1)
+                break
+        return self.context_bias_weight * bias
 
-        eff = synapse.efficiency()
-        if context and self.embedding_weight > 0:
-            sim = self.embedding_bridge.similarity(synapse.target.word, context)
-            eff -= self.embedding_weight * sim
-        return eff
+    def _synapse_score(self, synapse, context=None):
+        """Score combinado: estructural + embedding + contexto (mayor = mejor)."""
+        structural = synapse.strength / max(synapse.cost, 0.001)
+        emb = 0.0
+        if context and self.embedding_weight > 0 and synapse.target.word:
+            emb = self.embedding_weight * self.embedding_bridge.similarity(synapse.target.word, context)
+        ctx = self._context_bias(synapse)
+        return structural + emb + ctx
 
 
     def think(self, start_cell, steps=10, temperature=None, epsilon=0.0, track_in_wm=False):
@@ -568,10 +585,8 @@ class Brain:
 
         scores = []
         for s in cell.synapses_out:
-            graph_score = s.strength / max(s.cost, 0.001)
-            if self.embedding_weight > 0 and s.target.word and last_word:
-                graph_score += self.embedding_weight * self.embedding_bridge.similarity(s.target.word, last_word)
-            scores.append(math.exp(graph_score / temperature))
+            sc = self._synapse_score(s, context=last_word)
+            scores.append(math.exp(sc / temperature))
         total = sum(scores)
 
         if total <= 0:
@@ -697,6 +712,8 @@ class Brain:
 
             "structural_weight": self.structural_weight,
 
+            "context_bias_weight": self.context_bias_weight,
+
         }
 
 
@@ -808,3 +825,4 @@ class Brain:
 
         self.embedding_weight = data.get("embedding_weight", self.embedding_weight)
         self.structural_weight = data.get("structural_weight", self.structural_weight)
+        self.context_bias_weight = data.get("context_bias_weight", self.context_bias_weight)

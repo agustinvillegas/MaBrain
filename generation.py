@@ -215,16 +215,21 @@ def strategy_generate(brain, start_word, strategy_config):
         - steps: max steps
         - relations: set of relations to follow (or None for all)
         - use_analogy: if True, use analogy instead of walk
+        - ctx_bias: context_bias_weight (set on brain, optional)
     """
     ew = strategy_config.get("ew", 0.0)
     temp = strategy_config.get("temp", None)
     steps = strategy_config.get("steps", 6)
     relations = strategy_config.get("relations", None)
     use_analogy = strategy_config.get("use_analogy", False)
+    ctx_bias = strategy_config.get("ctx_bias", None)
 
-    # Set embedding weight temporarily
+    # Set params temporarily
     old_ew = brain.embedding_weight
     brain.embedding_weight = ew
+    old_ctx = brain.context_bias_weight
+    if ctx_bias is not None:
+        brain.context_bias_weight = ctx_bias
 
     try:
         if use_analogy and start_word:
@@ -248,3 +253,5 @@ def strategy_generate(brain, start_word, strategy_config):
         return linearize_path(path, start_word)
     finally:
         brain.embedding_weight = old_ew
+        if ctx_bias is not None:
+            brain.context_bias_weight = old_ctx

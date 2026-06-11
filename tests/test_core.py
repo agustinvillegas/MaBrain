@@ -617,14 +617,14 @@ class TestEmbeddingScoring(unittest.TestCase):
         self.assertIn("luz", words)
         self.assertIn("energia", words)
 
-    def test_embedding_cost_decreases_for_similar(self):
+    def test_synapse_score_increases_for_similar(self):
         brain = Brain(embedding_weight=0.5)
         brain.learn("perro ladra")
         brain.learn("perro animal")
         cell = brain.get_or_create_cell("perro")
-        cost_normal = brain._embedding_cost(cell.synapses_out[0])
-        cost_context = brain._embedding_cost(cell.synapses_out[0], context="perro")
-        self.assertLessEqual(cost_context, cost_normal)
+        score_normal = brain._synapse_score(cell.synapses_out[0])
+        score_context = brain._synapse_score(cell.synapses_out[0], context="perro")
+        self.assertGreaterEqual(score_context, score_normal)
 
     def test_embedding_weight_zero_by_default(self):
         brain = Brain()
