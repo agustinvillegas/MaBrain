@@ -56,7 +56,7 @@ class Brain:
 
 
     def __init__(self, embedding_bridge=None, embedding_weight=0.0, structural_weight=0.0,
-                 context_bias_weight=0.0):
+                 context_bias_weight=0.0, max_strength=50.0):
 
         self.cells = {}
         self.synapses = {}
@@ -67,6 +67,7 @@ class Brain:
         self.embedding_weight = embedding_weight
         self.structural_weight = structural_weight
         self.context_bias_weight = context_bias_weight
+        self.MAX_STRENGTH = max_strength
 
 
     def _resolve_concept(self, concept, min_score=0.1):
@@ -121,7 +122,7 @@ class Brain:
                 gain = syn.activation_trace * score
 
                 syn.reward += gain
-                syn.strength += gain * 0.1
+                syn.strength = min(syn.strength + gain * 0.1, self.MAX_STRENGTH)
 
             # abarata caminos útiles
                 syn.cost *= (1 - min(gain * 0.01, 0.1))
@@ -248,7 +249,7 @@ class Brain:
         return (entropy / max_entropy) * base_temp
 
 
-    def _select_synapse(self, options, temperature=1.0, epsilon=0.0, context=None):
+    def _select_synapse(self, options, temperature=1.0, epsilon=0.0, context=None, config=None):
 
         if temperature is None:
             temperature = self._dynamic_temperature(options)
@@ -259,21 +260,43 @@ class Brain:
         if random.random() < epsilon:
             return random.choice(options)
 
-        scores = [self._synapse_score(s, context) for s in options]
+        # ── 2-stage filtering ──────────────────────────────────
+        candidates = options
+        if config:
+            # Stage 1: strength + usage (cheap, O(n))
+            min_strength = config.get("min_strength", 0.0)
+            min_usage = config.get("min_usage", 0)
+            if min_strength > 0 or min_usage > 0:
+                filtered = [s for s in candidates
+                            if s.strength >= min_strength
+                            and s.inference_usage >= min_usage]
+                if filtered:  # don't kill selection if everything filtered
+                    candidates = filtered
+
+            # Stage 2: char-ngram pre-filter (medium, ~0.1ms each)
+            char_top_k = config.get("char_top_k", 0)
+            if char_top_k > 0 and context and len(candidates) > char_top_k:
+                scored = [(s, self.embedding_bridge._char_sim(context, s.concept))
+                          for s in candidates]
+                scored.sort(key=lambda x: -x[1])
+                candidates = [s for s, _ in scored[:char_top_k]]
+
+        # ── Score filtered candidates ───────────────────────────
+        scores = [self._synapse_score(s, context) for s in candidates]
         max_score = max(scores)
         weights = [math.exp((sc - max_score) / temperature) for sc in scores]
 
         total = sum(weights)
         if total <= 0:
-            return random.choice(options)
+            return random.choice(candidates)
 
         r = random.random() * total
         cumulative = 0
         for i, w in enumerate(weights):
             cumulative += w
             if r <= cumulative:
-                return options[i]
-        return options[-1]
+                return candidates[i]
+        return candidates[-1]
 
     def _context_bias(self, synapse):
         """Bias contextual de WM: entidades activas + topic stack.

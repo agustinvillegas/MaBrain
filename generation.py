@@ -93,10 +93,11 @@ def _needs_article(word):
 
 
 def build_traced_thought(brain, start_cell, steps=10, temperature=None, epsilon=0.0,
-                         relation_filter=None):
+                         relation_filter=None, select_config=None):
     """
     Like think() but returns list of (word, relation) tuples.
     If relation_filter is a set/list, only follow synapses with those relations.
+    select_config: optional dict passed to _select_synapse (min_strength, min_usage, char_top_k)
     """
     current = start_cell
     result = []
@@ -108,7 +109,8 @@ def build_traced_thought(brain, start_cell, steps=10, temperature=None, epsilon=
             options = [s for s in options if s.relation in relation_filter]
             if not options:
                 break
-        choice = brain._select_synapse(options, temperature=temperature, epsilon=epsilon, context=current.word)
+        choice = brain._select_synapse(options, temperature=temperature, epsilon=epsilon,
+                                       context=current.word, config=select_config)
         result.append({
             "word": choice.concept,
             "relation": choice.relation,
@@ -216,6 +218,9 @@ def strategy_generate(brain, start_word, strategy_config):
         - relations: set of relations to follow (or None for all)
         - use_analogy: if True, use analogy instead of walk
         - ctx_bias: context_bias_weight (set on brain, optional)
+        - min_strength: filter synapses below this strength (optional)
+        - min_usage: filter synapses below this usage count (optional)
+        - char_top_k: keep top-k by char ngram sim before MiniLM (optional)
     """
     ew = strategy_config.get("ew", 0.0)
     temp = strategy_config.get("temp", None)
@@ -223,6 +228,11 @@ def strategy_generate(brain, start_word, strategy_config):
     relations = strategy_config.get("relations", None)
     use_analogy = strategy_config.get("use_analogy", False)
     ctx_bias = strategy_config.get("ctx_bias", None)
+    select_config = {
+        k: strategy_config[k]
+        for k in ("min_strength", "min_usage", "char_top_k")
+        if k in strategy_config
+    } or None
 
     # Set params temporarily
     old_ew = brain.embedding_weight
@@ -237,7 +247,8 @@ def strategy_generate(brain, start_word, strategy_config):
             start_cell = brain.get_or_create_cell(start_word, fuzzy=True)
             if start_cell and start_cell.synapses_out:
                 path = build_traced_thought(brain, start_cell, steps=2,
-                                            temperature=0.1, relation_filter={"IS_A"})
+                                            temperature=0.1, relation_filter={"IS_A"},
+                                            select_config=select_config)
                 if path:
                     analogies = brain.analogy(start_word, path[-1]["word"],
                                               start_word, top_k=3)
@@ -249,7 +260,8 @@ def strategy_generate(brain, start_word, strategy_config):
         path = build_traced_thought(brain,
                                     brain.get_or_create_cell(start_word, fuzzy=True),
                                     steps=steps, temperature=temp,
-                                    relation_filter=relations)
+                                    relation_filter=relations,
+                                    select_config=select_config)
         return linearize_path(path, start_word)
     finally:
         brain.embedding_weight = old_ew
