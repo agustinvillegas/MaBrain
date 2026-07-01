@@ -1,27 +1,10 @@
-"""
-Entity linking + canonicalization pipeline.
 
-Takes raw triplets from ConceptNet, Wikidata, etc. and produces
-a clean, deduplicated Layer 1 dataset with:
-
-  1. Concept normalization (lowercase, underscores, synonym merging)
-  2. Char-ngram similarity clustering (fast, no GPU needed)
-  3. Optional MiniLM embedding clustering (better, needs GPU)
-  4. Source deduplication + confidence scoring
-  5. Output: canonical_triplets.jsonl (Capa 1)
-
-Usage:
-    python canonicalize.py --input data/processed/cn_triplets.jsonl \\
-        --output data/processed/layer1_triplets.json
-    python canonicalize.py --input data/processed/cn_triplets.jsonl \\
-        data/processed/wd_triplets.jsonl --embed --output data/processed/layer1_triplets.json
-"""
 import json
 import os
 import sys
 import time
 import math
-from collections import defaultdict, Counter
+from collections import defaultdict, Counter    
 
 
 # ── Char n-gram utilities ─────────────────────────────────────────
@@ -43,7 +26,7 @@ def jaccard(a, b):
 
 
 # ── Disjoint Set (Union-Find) ─────────────────────────────────────
-class DisjointSet:
+class DisjointSet: 
     def __init__(self):
         self.parent = {}
         self.rank = {}

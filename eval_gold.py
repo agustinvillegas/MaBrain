@@ -34,7 +34,7 @@ def load_brain(path):
 def load_gold(path):
     """Load validated gold schemas (valid: true only)."""
     items = []
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, "r", encoding="utf-8-sig") as f:
         for line in f:
             line = line.strip()
             if not line:

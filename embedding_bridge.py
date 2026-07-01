@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
@@ -27,8 +28,10 @@ class EmbeddingBridge:
             return True
         try:
             from sentence_transformers import SentenceTransformer
-            self.model = SentenceTransformer(self.model_name)
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.model = SentenceTransformer(self.model_name, device=device)
             self.model_loaded = True
+            print(f"  [EmbeddingBridge] Modelo en: {device.upper()}")
             return True
         except Exception as e:
             print(f"  [EmbeddingBridge] MiniLM load failed: {e}")

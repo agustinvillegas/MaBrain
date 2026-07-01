@@ -117,7 +117,7 @@ ROLE_TEMPLATES = {
 DESCRIPTION_TEMPLATES = {
     ("IS_A",): "Una entidad pertenece a una clase",
     ("IS_A", "IS_A"): "Una entidad pertenece a una clase que a su vez es subclase de otra",
-    ("IS_A", "IS_A", "IS_A"): "Jerarquía taxonómica de 3 niveles (entity → class → superclass → supersuperclass)",
+    ("IS_A", "IS_A", "IS_A"): "Jerarquia taxonomica de 3 niveles (entity -> class -> superclass -> supersuperclass)",
     ("FUNCTION",): "Un agente realiza una acción",
     ("FUNCTION", "IS_A"): "Un agente realiza una acción que es un tipo de actividad",
     ("CAUSE",): "Una causa produce un efecto",
@@ -174,7 +174,7 @@ def generate_description(rel_list):
     if len(rel_types) == 1:
         rel = list(rel_types.keys())[0]
         return f"Cadena de {len(rel_list)} pasos de {rel}"
-    return f"Secuencia mixta: {' → '.join(rel_list)}"
+    return f"Secuencia mixta: {' -> '.join(rel_list)}"
 
 
 # ── Stats ─────────────────────────────────────────────────────────

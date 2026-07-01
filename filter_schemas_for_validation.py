@@ -42,7 +42,7 @@ def filter_and_sample(schemas, max_schemas=100, min_instances=3, max_instances_s
 
     # Remove very long sequences (hard to validate)
     schemas = [s for s in schemas if len(s.get("relation_sequence", [])) <= 4]
-    print(f"  After max_length filter (≤4): {len(schemas)} schemas")
+    print(f"  After max_length filter (<=4): {len(schemas)} schemas")
 
     # Remove schemas with no instances
     schemas = [s for s in schemas if s.get("instances")]
@@ -155,7 +155,7 @@ def print_validation_preview(items):
     for i, item in enumerate(items[:5]):
         print(f"\n  --- [{i+1}] {item['schema_id']} ---")
         print(f"  Description: {item['description']}")
-        print(f"  Relations: {' → '.join(item['relation_sequence'])}")
+        print(f"  Relations: {' -> '.join(item['relation_sequence'])}")
         print(f"  Roles: {item['roles']}")
         print(f"  Domain: {item['domain']}")
         print(f"  Total instances: {item['num_instances_total']}")

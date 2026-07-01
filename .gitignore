@@ -12,3 +12,4 @@ datasets/
 eval_human_results.csv
 current_vocab.json
 current_vocab.txt
+/data
