@@ -342,11 +342,8 @@ def cmd_wm(brain, args):
 
 def main():
 
-    brain = Brain()
-    # Try v6 pruned first, fallback to default
-    loaded_path = r"D:\ma_brain_data\brain_state_v8_v6_pruned_evaled.json"
-    if not os.path.exists(loaded_path):
-        loaded_path = "states/brain_state.json"
+    brain = Brain(context_bias_weight=0.3)
+    loaded_path = "data/brain_states/brain_massive_v1.json"
     if os.path.exists(loaded_path):
         brain.load(loaded_path)
         print(f"Cargado: {len(brain.cells)} neuronas, {len(brain.synapses)} sinapsis")

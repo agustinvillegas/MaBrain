@@ -68,7 +68,15 @@ def load_layer1(brain, triplets):
 
 
 # ── FASE 2: Walk + reward Layer 2 paths ────────────────────────
-def load_layer2(brain, paths, epochs=3):
+def _print_epoch_stats(brain, label):
+    """Print cells, synapses, and top relations for a brain state."""
+    from collections import Counter
+    rel_counts = Counter(s.relation for s in brain.synapses.values())
+    top_rels = ", ".join(f"{r}={c}" for r, c in rel_counts.most_common(5))
+    print(f"    Cells: {len(brain.cells):,}  Synapses: {len(brain.synapses):,}  [{top_rels}]")
+
+
+def load_layer2(brain, paths, epochs=3, checkpoint_base=None):
     """Walk each path and apply reward_thought to strengthen it."""
     print(f"\n--- FASE 2: Training Layer 2 paths ({epochs} epochs) ---")
     start = time.time()
@@ -123,6 +131,13 @@ def load_layer2(brain, paths, epochs=3):
         elapsed_epoch = time.time() - epoch_start
         total_rewards += epoch_rewards
         print(f"  Epoch {epoch + 1}: {epoch_rewards} paths rewarded ({elapsed_epoch:.1f}s)")
+        _print_epoch_stats(brain, f"    after epoch {epoch + 1}")
+
+        # Save checkpoint after each epoch
+        if checkpoint_base:
+            epoch_path = checkpoint_base.replace(".json", f"_epoch{epoch+1}.json")
+            brain.save(epoch_path)
+            print(f"    Checkpoint saved: {epoch_path}")
 
     elapsed = time.time() - start
     print(f"  Total rewarded: {total_rewards} path-walks")
@@ -257,7 +272,7 @@ def main():
     # FASE 2: Layer 2
     paths = load_json(args.layer2).get("paths", [])
     print(f"  Loaded {len(paths):,} paths from {args.layer2}")
-    load_layer2(brain, paths, epochs=args.epochs)
+    load_layer2(brain, paths, epochs=args.epochs, checkpoint_base=args.output)
 
     # FASE 3: Layer 3 (optional)
     if args.layer3 and os.path.exists(args.layer3):

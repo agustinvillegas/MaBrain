@@ -586,7 +586,10 @@ class Brain:
         scores = []
         for s in cell.synapses_out:
             sc = self._synapse_score(s, context=last_word)
-            scores.append(math.exp(sc / temperature))
+            scores.append(sc / temperature)
+        # Numerically stable softmax: subtract max to avoid overflow
+        max_score = max(scores) if scores else 0
+        scores = [math.exp(s - max_score) for s in scores]
         total = sum(scores)
 
         if total <= 0:
