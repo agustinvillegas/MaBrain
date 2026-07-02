@@ -143,11 +143,11 @@ def print_dialogue_test(brain, dialogues):
             preds = brain.predict_next(topic, top_k=3)
             pred_words = [p[0] for p in preds]
             match = expected in pred_words
-            marker = "✓" if match else "✗"
+            marker = "[OK]" if match else "[NO]"
             top1_match = pred_words[0] == expected if pred_words else False
-            top1_marker = "✓" if top1_match else "✗"
+            top1_marker = "[OK]" if top1_match else "[NO]"
 
-            print(f"    [{marker}] {turn['user']}")
+            print(f"    {marker} {turn['user']}")
             print(f"           Expected: {expected} ({relation})")
             print(f"           Predicted: {pred_words[:3]}  top1={top1_marker}")
 

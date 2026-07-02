@@ -179,13 +179,23 @@ def linearize_path(path, start_word):
         clauses.append(clause)
         current_subj = obj
 
-    # Join clauses
+    # Join as separate sentences with natural flow
     if len(clauses) == 1:
         sentence = clauses[0]
     elif len(clauses) == 2:
-        sentence = f"{clauses[0]} and {clauses[1]}"
+        # "Tree is a plant, and plant is a living thing."
+        sentence = f"{clauses[0]}, and {clauses[1]}"
     else:
-        sentence = ", ".join(clauses[:-1]) + f", and {clauses[-1]}"
+        # "Tree is a plant. Plant is a living thing, and living thing is an organism."
+        parts = []
+        for i, cl in enumerate(clauses):
+            if i == len(clauses) - 1:
+                parts.append(f", and {cl}")
+            elif i == 0:
+                parts.append(cl)
+            else:
+                parts.append(f". {cl[0].upper() + cl[1:]}")
+        sentence = "".join(parts)
 
     # Normalize: replace underscores with spaces
     sentence = sentence.replace("_", " ")
@@ -206,6 +216,39 @@ def generate(brain, start_word, steps=8, temperature=None, epsilon=0.0):
 
     path = build_traced_thought(brain, start_cell, steps=steps, temperature=temperature, epsilon=epsilon)
     return linearize_path(path, start_word)
+
+
+def _format_strategy_response(path, start_word, strategy_config):
+    """Wrap a linearized path in intent-appropriate response template."""
+    if not path:
+        return f"I don't know what {start_word} is."
+
+    base = linearize_path(path, start_word)
+    strategy = strategy_config.get("_strategy", "")
+    relations = strategy_config.get("relations", None)
+
+    # Definition: IS_A chain — natural response
+    if strategy in ("EXPLAIN_IS_A",) and relations == {"IS_A"}:
+        return base
+
+    # Function / usage
+    if strategy == "EXPLAIN_FUNCTION":
+        return base
+
+    # Property
+    if strategy == "EXPLAIN_PROPERTY":
+        return base
+
+    # Location
+    if strategy == "EXPLAIN_LOCATION":
+        return base
+
+    # Cause
+    if strategy == "EXPLAIN_CAUSE":
+        return base
+
+    # Explore / follow-up
+    return base
 
 
 def strategy_generate(brain, start_word, strategy_config):
@@ -233,6 +276,9 @@ def strategy_generate(brain, start_word, strategy_config):
         for k in ("min_strength", "min_usage", "char_top_k")
         if k in strategy_config
     } or None
+
+    # Attach strategy name for response formatting
+    strategy_config["_strategy"] = strategy_config.get("_strategy", "")
 
     # Set params temporarily
     old_ew = brain.embedding_weight
@@ -262,7 +308,7 @@ def strategy_generate(brain, start_word, strategy_config):
                                     steps=steps, temperature=temp,
                                     relation_filter=relations,
                                     select_config=select_config)
-        return linearize_path(path, start_word)
+        return _format_strategy_response(path, start_word, strategy_config)
     finally:
         brain.embedding_weight = old_ew
         if ctx_bias is not None:

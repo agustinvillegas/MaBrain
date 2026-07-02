@@ -64,10 +64,9 @@ def mine_schemas(paths, min_support=3):
                 # Path length should be n_relations + 1
                 continue
 
-            # Build instance dict keyed by role
-            instance = {}
-            for i, (role, word) in enumerate(zip(roles, words)):
-                instance[role] = word
+            # Build instance as list of words (posicional, alineado con roles)
+            # ANTES: instance[role] = word sobrescribía roles repetidos (e.g. class→class→class)
+            instance = words[:]
 
             # Dedup instances by the word tuple
             inst_key = tuple(words)

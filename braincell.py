@@ -5,7 +5,6 @@ import uuid
 from embedding_bridge import EmbeddingBridge
 from working_memory import WorkingMemory
 
-
 class Braincell:
 
     def __init__(self, cell_id=None, word=None):
@@ -844,6 +843,9 @@ class Brain:
             "thoughts",
             []
         )
+
+        # Pre-warm embedding cache with all known words
+        self.embedding_bridge.prewarm([c.word for c in self.cells.values() if c.word])
 
         wm_data = data.get("working_memory")
         if wm_data:

@@ -159,10 +159,10 @@ def load_layer3(brain, schemas):
 
     for schema in schemas:
         for instance in schema.get("instances", []):
-            # Schema instances have role-based keys like {"entity": "dog", "class": "mammal"}
-            # We need to reconstruct word pairs from the relation sequence
+            # Schema instances are positional lists aligned with relation_sequence
+            # [entity, class_1, class_2, ...]  — already ordered, no role-key collision
             rels = schema.get("relation_sequence", [])
-            words = list(instance.values())
+            words = instance  # already a list
 
             if len(words) < 2 or len(rels) < 1:
                 continue
@@ -188,8 +188,11 @@ def load_layer3(brain, schemas):
                 else:
                     # Try to create it (may not be in Layer 1)
                     if cell_a.word and cell_b.word:
-                        brain.connect(cell_a, cell_b, b, relation=rel)
-                        missing += 1
+                        syn = brain.connect(cell_a, cell_b, b, relation=rel)
+                        if syn:
+                            syn.inference_usage = 2  # survive min_usage=2 prune
+                            syn.strength = 3.0       # mark as schema-derived
+                            missing += 1
 
     elapsed = time.time() - start
     print(f"  Verified existing schema edges: {verified}")

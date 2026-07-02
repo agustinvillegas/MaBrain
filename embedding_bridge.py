@@ -58,7 +58,6 @@ class EmbeddingBridge:
         """Single-concept embedding with LRU cache."""
         if concept in self._embedding_cache:
             return self._embedding_cache[concept]
-        _log(f"get_embedding('{concept}') — no cache, calling _ensure_model...")
         if not self._ensure_model():
             return None
         try:
@@ -116,15 +115,33 @@ class EmbeddingBridge:
         scored.sort(key=lambda x: -x[1])
         return [c for c, s in scored[:k]]
 
+    def prewarm(self, words, max_words=2000):
+        """Pre-compute embeddings for known words (up to max_words).
+        
+        Full prewarm (67k words) is too slow on GTX 1050 Ti (~3 min).
+        We cache the first 2000 most common concepts — enough to accelerate 
+        the 2-stage filter without the startup cost.
+        """
+        if not words:
+            return
+        if not self._ensure_model():
+            return
+        subset = words[:max_words]
+        _log(f"prewarm: encoding {len(subset)}/{len(words)} words...")
+        t0 = time.time()
+        self.encode(subset)
+        _log(f"prewarm done ({time.time()-t0:.1f}s)")
+
     def similarity(self, word_a, word_b):
-        _log(f"similarity('{word_a}', '{word_b}')")
+        if not self.model_loaded:
+            return self._char_sim(word_a, word_b)
+        # Batch encode [a, b] in one call instead of 2 separate get_embedding
+        embs = self.encode([word_a, word_b])
+        if embs is None or len(embs) != 2:
+            return self._char_sim(word_a, word_b)
         char_sim = self._char_sim(word_a, word_b)
-        emb_a = self.get_embedding(word_a)
-        emb_b = self.get_embedding(word_b)
-        if emb_a is not None and emb_b is not None:
-            model_sim = float(np.dot(emb_a, emb_b))
-            return min(max(model_sim, char_sim), 1.0)
-        return char_sim
+        model_sim = float(np.dot(embs[0], embs[1]))
+        return min(max(model_sim, char_sim), 1.0)
 
     def closest(self, word, candidates, top_k=5, min_score=0.0):
         if not candidates:

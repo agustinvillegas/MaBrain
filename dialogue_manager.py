@@ -8,22 +8,49 @@ import re
 
 # ── Intent patterns (priority-ordered) ───────────────────────────
 # (intent_name, regex_pattern, extract_entity_group)
+# Patterns use \S+ for entity to handle single words; multi-word is bounded by pattern context
 INTENT_PATTERNS = [
+    # ── GREETING ──────────────────────────────────────────────
     ("GREETING",   re.compile(r"^(hi|hello|hey|hola|good\s+(morning|afternoon|evening))\b", re.I), None),
-    ("PROPERTY",   re.compile(r"what\s+is\s+(a|an|the)\s+(?P<entity>\w+)\s+like", re.I), "entity"),
-    ("ANALOGY",    re.compile(r"how\s+is\s+(a|an|the)\s+(?P<entity>\w+)\s+similar\s+to\s+(?P<other>\w+)", re.I), "entity"),
-    ("ANALOGY",    re.compile(r"what.?\s+is\s+(a|an|the)\s+(?P<entity>\w+)\s+similar\s+to\s+(?P<other>\w+)", re.I), "entity"),
-    ("ANALOGY",    re.compile(r"how\s+is\s+(a|an|the)\s+(?P<entity>\w+)\s+like\s+(a|an|the)\s+(?P<other>\w+)", re.I), "entity"),
-    ("FUNCTION",   re.compile(r"what\s+does\s+(a|an|the)\s+(?P<entity>\w+)\s+do", re.I), "entity"),
-    ("FUNCTION",   re.compile(r"how\s+does\s+(a|an|the)\s+(?P<entity>\w+)\s+work", re.I), "entity"),
-    ("FUNCTION",   re.compile(r"what\s+is\s+(a|an|the)\s+(?P<entity>\w+)\s+used\s+for", re.I), "entity"),
-    ("DEFINITION", re.compile(r"what\s+(is|are|was|were)\s+(a|an|the)\s+(?P<entity>\w+)", re.I), "entity"),
-    ("DEFINITION", re.compile(r"tell\s+me\s+about\s+(a|an|the)\s+(?P<entity>\w+)", re.I), "entity"),
-    ("DEFINITION", re.compile(r"what.?\s+is\s+(a|an|the)\s+(?P<entity>\w+)", re.I), "entity"),
-    ("PROPERTY",   re.compile(r"is\s+(a|an|the)\s+(?P<entity>\w+)\s+(?P<property>\w+)", re.I), "entity"),
-    ("LOCATION",   re.compile(r"where\s+(is|are|do)\s+(a|an|the)\s+(?P<entity>\w+)", re.I), "entity"),
-    ("CAUSE",      re.compile(r"what\s+causes\s+((a|an|the)\s+)?(?P<entity>\w+)", re.I), "entity"),
-    ("CAUSE",      re.compile(r"why\s+does\s+((a|an|the)\s+)?(?P<entity>\w+)", re.I), "entity"),
+
+    # ── ANALOGY ───────────────────────────────────────────────
+    ("ANALOGY",    re.compile(r"how\s+is\s+(a|an|the\s+)?(?P<entity>\S+)\s+similar\s+to\s+(a|an|the\s+)?(?P<other>\S+)", re.I), "entity"),
+    ("ANALOGY",    re.compile(r"what.?\s+is\s+(a|an|the\s+)?(?P<entity>\S+)\s+similar\s+to\s+(a|an|the\s+)?(?P<other>\S+)", re.I), "entity"),
+    ("ANALOGY",    re.compile(r"how\s+is\s+(a|an|the\s+)?(?P<entity>\S+)\s+like\s+(a|an|the\s+)?(?P<other>\S+)", re.I), "entity"),
+
+    # ── DEFINITION (what is / what are / tell me about) ───────
+    ("DEFINITION", re.compile(r"what\s+(is|are|was|were)\s+((a|an|the)\s+)?(?P<entity>\S+)", re.I), "entity"),
+    ("DEFINITION", re.compile(r"tell\s+me\s+about\s+((a|an|the)\s+)?(?P<entity>\S+)", re.I), "entity"),
+    ("DEFINITION", re.compile(r"what.?\s+is\s+((a|an|the)\s+)?(?P<entity>\S+)", re.I), "entity"),
+
+    # ── FUNCTION (what does X do / how does X work / used for) ──
+    ("FUNCTION",   re.compile(r"what\s+does\s+((a|an|the)\s+)?(?P<entity>\S+)\s+do", re.I), "entity"),
+    ("FUNCTION",   re.compile(r"what\s+do\s+((a|an|the)\s+)?(?P<entity>\S+)\s+do", re.I), "entity"),
+    ("FUNCTION",   re.compile(r"how\s+does\s+((a|an|the)\s+)?(?P<entity>\S+)\s+work", re.I), "entity"),
+    ("FUNCTION",   re.compile(r"what\s+is\s+((a|an|the)\s+)?(?P<entity>\S+)\s+used\s+for", re.I), "entity"),
+
+    # ── PROPERTY (what is X like / how does X look / is X Y?) ──
+    ("PROPERTY",   re.compile(r"what\s+is\s+((a|an|the)\s+)?(?P<entity>\S+)\s+like", re.I), "entity"),
+    ("PROPERTY",   re.compile(r"how\s+(is|are|was|were)\s+((a|an|the)\s+)?(?P<entity>\S+)\s+(look|sound|feel|taste|smell|like|describe)", re.I), "entity"),
+    ("PROPERTY",   re.compile(r"^(is|are)\s+((a|an|the)\s+)?(?P<entity>\w+)\s+(?P<property>\w+)", re.I), "entity"),
+
+    # ── CAUSE (why / what causes) ────────────────────────────
+    ("CAUSE",      re.compile(r"what\s+causes\s+((a|an|the)\s+)?(?P<entity>\S+)", re.I), "entity"),
+    ("CAUSE",      re.compile(r"why\s+(is|are|was|were)\s+((a|an|the)\s+)?(?P<entity>\S+)", re.I), "entity"),
+    ("CAUSE",      re.compile(r"why\s+(do|does|did)\s+((a|an|the)\s+)?(?P<entity>\S+)", re.I), "entity"),
+    ("CAUSE",      re.compile(r"why\s+((a|an|the)\s+)?(?P<entity>\S+)", re.I), "entity"),
+
+    # ── LOCATION (where) ─────────────────────────────────────
+    ("LOCATION",   re.compile(r"where\s+(is|are|do|does|was|were)\s+((a|an|the)\s+)?(?P<entity>\S+)", re.I), "entity"),
+
+    # ── HOW general (fallback — how does X / how is X) ──────
+    ("FUNCTION",   re.compile(r"how\s+(do|does|did)\s+((a|an|the)\s+)?(?P<entity>\S+)", re.I), "entity"),
+    ("PROPERTY",   re.compile(r"how\s+(is|are|was|were)\s+((a|an|the)\s+)?(?P<entity>\S+)", re.I), "entity"),
+
+    # ── WHEN ──────────────────────────────────────────────────
+    ("FOLLOWUP",   re.compile(r"when\s+(do|does|did|is|are|was|were)\s+((a|an|the)\s+)?(?P<entity>\S+)", re.I), "entity"),
+
+    # ── FOLLOWUP ─────────────────────────────────────────────
     ("FOLLOWUP",   re.compile(r"^what\s+about\b", re.I), None),
     ("FOLLOWUP",   re.compile(r"^(tell\s+me\s+more|what\s+else|and\b)", re.I), None),
     ("FOLLOWUP",   re.compile(r"^(yes|ok|sure|yeah|yep|okay)$", re.I), None),
@@ -50,11 +77,11 @@ STRATEGY_MAP = {
 #   use_analogy: use analogy method instead of walk
 #   template: use a hardcoded template
 STRATEGY_CONFIG = {
-    "EXPLAIN_IS_A":     {"temp": 0.1, "ew": 0.0, "steps": 6, "relations": {"IS_A"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10},
-    "EXPLAIN_FUNCTION": {"temp": 0.2, "ew": 0.0, "steps": 6, "relations": {"FUNCTION", "USED_FOR"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10},
-    "EXPLAIN_PROPERTY": {"temp": 0.1, "ew": 0.0, "steps": 4, "relations": {"HAS_PROPERTY"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10},
-    "EXPLAIN_LOCATION": {"temp": 0.1, "ew": 0.0, "steps": 4, "relations": {"LOCATED_IN"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10},
-    "EXPLAIN_CAUSE":    {"temp": 0.2, "ew": 0.0, "steps": 5, "relations": {"CAUSE"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10},
+    "EXPLAIN_IS_A":     {"temp": 0.1, "ew": 0.3, "steps": 2, "relations": {"IS_A"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10},
+    "EXPLAIN_FUNCTION": {"temp": 0.2, "ew": 0.3, "steps": 2, "relations": {"FUNCTION", "USED_FOR"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10},
+    "EXPLAIN_PROPERTY": {"temp": 0.1, "ew": 0.3, "steps": 2, "relations": {"HAS_PROPERTY"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10},
+    "EXPLAIN_LOCATION": {"temp": 0.1, "ew": 0.3, "steps": 2, "relations": {"LOCATED_IN"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10},
+    "EXPLAIN_CAUSE":    {"temp": 0.2, "ew": 0.3, "steps": 2, "relations": {"CAUSE"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10},
     "ANALOGY_SEARCH":   {"temp": 0.0, "ew": 0.0, "steps": 0, "relations": None, "use_analogy": True, "template": None, "min_strength": 0.0, "min_usage": 0, "char_top_k": 0},
     "CONTINUE_TOPIC":   {"temp": 0.3, "ew": 0.1, "steps": 8, "relations": None, "use_analogy": False, "template": None, "ctx_bias": 0.3, "min_strength": 0.0, "min_usage": 0, "char_top_k": 10},
     "GREET":            {"temp": 0.0, "ew": 0.0, "steps": 0, "relations": None, "use_analogy": False, "template": "hello", "min_strength": 0.0, "min_usage": 0, "char_top_k": 0},
@@ -117,6 +144,9 @@ class ResponseComposer:
         if strategy == "GREET":
             import random
             return random.choice(GREETINGS)
+
+        # Tag strategy name for response formatting
+        config["_strategy"] = strategy
 
         if not start_word:
             fb = config.get("_fallback_entity")
