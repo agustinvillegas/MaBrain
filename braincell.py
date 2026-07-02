@@ -280,6 +280,14 @@ class Brain:
                 scored.sort(key=lambda x: -x[1])
                 candidates = [s for s, _ in scored[:char_top_k]]
 
+            # Stage 3: min similarity threshold (semantic filter, cache-fast)
+            min_sim = config.get("min_sim", 0.0)
+            if min_sim > 0 and context and len(candidates) > 1:
+                filtered = [s for s in candidates if s.target.word and
+                            self.embedding_bridge.similarity(context, s.target.word) >= min_sim]
+                if filtered:  # don't kill selection if everything filtered
+                    candidates = filtered
+
         # ── Score filtered candidates ───────────────────────────
         scores = [self._synapse_score(s, context) for s in candidates]
         max_score = max(scores)
@@ -709,9 +717,8 @@ class Brain:
         dm = DialogueManager(self)
         response = dm.respond(user_text)
 
-        # 4. Ingest bot turn
-        resp_entities = self._extract_entities(response)
-        self.wm.ingest(role="bot", message=response, entities=resp_entities, thought=response)
+        # 4. Ingest bot turn (no entities — bot's own words shouldn't pollute WM)
+        self.wm.ingest(role="bot", message=response, entities=[], thought=response)
 
         # 5. Decay activations
         self.wm.decay_entities()

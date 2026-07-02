@@ -273,7 +273,7 @@ def strategy_generate(brain, start_word, strategy_config):
     ctx_bias = strategy_config.get("ctx_bias", None)
     select_config = {
         k: strategy_config[k]
-        for k in ("min_strength", "min_usage", "char_top_k")
+        for k in ("min_strength", "min_usage", "char_top_k", "min_sim")
         if k in strategy_config
     } or None
 

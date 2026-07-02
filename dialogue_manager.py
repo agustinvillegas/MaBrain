@@ -77,11 +77,11 @@ STRATEGY_MAP = {
 #   use_analogy: use analogy method instead of walk
 #   template: use a hardcoded template
 STRATEGY_CONFIG = {
-    "EXPLAIN_IS_A":     {"temp": 0.1, "ew": 0.3, "steps": 2, "relations": {"IS_A"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10},
-    "EXPLAIN_FUNCTION": {"temp": 0.2, "ew": 0.3, "steps": 2, "relations": {"FUNCTION", "USED_FOR"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10},
-    "EXPLAIN_PROPERTY": {"temp": 0.1, "ew": 0.3, "steps": 2, "relations": {"HAS_PROPERTY"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10},
-    "EXPLAIN_LOCATION": {"temp": 0.1, "ew": 0.3, "steps": 2, "relations": {"LOCATED_IN"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10},
-    "EXPLAIN_CAUSE":    {"temp": 0.2, "ew": 0.3, "steps": 2, "relations": {"CAUSE"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10},
+    "EXPLAIN_IS_A":     {"temp": 0.1, "ew": 0.3, "steps": 2, "relations": {"IS_A"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10, "min_sim": 0.3},
+    "EXPLAIN_FUNCTION": {"temp": 0.2, "ew": 0.3, "steps": 2, "relations": {"FUNCTION", "USED_FOR"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10, "min_sim": 0.0},
+    "EXPLAIN_PROPERTY": {"temp": 0.1, "ew": 0.3, "steps": 2, "relations": {"HAS_PROPERTY"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10, "min_sim": 0.0},
+    "EXPLAIN_LOCATION": {"temp": 0.1, "ew": 0.3, "steps": 2, "relations": {"LOCATED_IN"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10, "min_sim": 0.0},
+    "EXPLAIN_CAUSE":    {"temp": 0.2, "ew": 0.3, "steps": 2, "relations": {"CAUSE"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10, "min_sim": 0.0},
     "ANALOGY_SEARCH":   {"temp": 0.0, "ew": 0.0, "steps": 0, "relations": None, "use_analogy": True, "template": None, "min_strength": 0.0, "min_usage": 0, "char_top_k": 0},
     "CONTINUE_TOPIC":   {"temp": 0.3, "ew": 0.1, "steps": 8, "relations": None, "use_analogy": False, "template": None, "ctx_bias": 0.3, "min_strength": 0.0, "min_usage": 0, "char_top_k": 10},
     "GREET":            {"temp": 0.0, "ew": 0.0, "steps": 0, "relations": None, "use_analogy": False, "template": "hello", "min_strength": 0.0, "min_usage": 0, "char_top_k": 0},

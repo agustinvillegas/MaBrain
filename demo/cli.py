@@ -395,7 +395,8 @@ def main():
         elif cmd == "wm":
             cmd_wm(brain, args)
         else:
-            print(f"  ? comando desconocido: '{cmd}' (escribe 'ayuda')")
+            # Auto-route unknown input to chat
+            cmd_chat(brain, parts)
 
         print()
 

@@ -60,6 +60,26 @@ def load_layer1(brain, triplets):
     print(f"  Cells: {len(brain.cells):,}, Synapses: {len(brain.synapses):,}")
     print(f"  Time: {elapsed:.1f}s")
 
+    # ── Semantic bootstrap (MiniLM only for top N hub words) ──
+    print("  Running semantic bootstrap (MiniLM for top hubs)...")
+    t0 = time.time()
+    # Find most connected words (hubs)
+    word_degree = {}
+    for syn in brain.synapses.values():
+        for w in (syn.origin.word, syn.target.word):
+            if w: word_degree[w] = word_degree.get(w, 0) + 1
+    top_words = sorted(word_degree, key=lambda w: -word_degree[w])[:5000]
+    top_set = set(top_words)
+    # Batch encode hubs
+    if top_words:
+        brain.embedding_bridge.encode(top_words)
+        for syn in brain.synapses.values():
+            if syn.origin.word in top_set and syn.target.word in top_set:
+                sim = brain.embedding_bridge.similarity(syn.origin.word, syn.target.word)
+                syn.strength = 1.0 + 0.5 * max(sim, 0.0)
+    t_bs = time.time() - t0
+    print(f"  Bootstrapped hubs: {len(top_words)} words ({t_bs:.1f}s)")
+
     # Auto-infer missing relations
     print("  Running auto_infer_relations...")
     brain.auto_infer_relations()
@@ -108,7 +128,12 @@ def load_layer2(brain, paths, epochs=3, checkpoint_base=None):
                 if target.word is None:
                     target.word = target_word
 
-                syn = brain.connect(current, target, target_word, relation=rel)
+                # Only reward existing edges (don't create new ones)
+                syn = None
+                for s in current.synapses_out:
+                    if s.target == target and s.concept == target_word and s.relation == rel:
+                        syn = s
+                        break
                 if syn is None:
                     valid_path = False
                     break
@@ -186,13 +211,8 @@ def load_layer3(brain, schemas):
                 if found:
                     verified += 1
                 else:
-                    # Try to create it (may not be in Layer 1)
-                    if cell_a.word and cell_b.word:
-                        syn = brain.connect(cell_a, cell_b, b, relation=rel)
-                        if syn:
-                            syn.inference_usage = 2  # survive min_usage=2 prune
-                            syn.strength = 3.0       # mark as schema-derived
-                            missing += 1
+                    # Don't create missing edges — skip if not in curated graph
+                    missing += 1
 
     elapsed = time.time() - start
     print(f"  Verified existing schema edges: {verified}")
@@ -287,6 +307,22 @@ def main():
 
     # FASE 4: Prune + Consolidate
     consolidate(brain, min_usage=args.min_usage)
+
+    # ── Final semantic bootstrap (top hubs only) ──
+    print("\n  Running final semantic bootstrap...")
+    word_degree = {}
+    for syn in brain.synapses.values():
+        for w in (syn.origin.word, syn.target.word):
+            if w: word_degree[w] = word_degree.get(w, 0) + 1
+    top_words = sorted(word_degree, key=lambda w: -word_degree[w])[:5000]
+    top_set = set(top_words)
+    if top_words:
+        brain.embedding_bridge.encode(top_words)
+        for syn in brain.synapses.values():
+            if syn.origin.word in top_set and syn.target.word in top_set:
+                sim = brain.embedding_bridge.similarity(syn.origin.word, syn.target.word)
+                syn.strength = 1.0 + 0.5 * max(sim, 0.0)
+    print(f"  Final bootstrap: {len(top_words)} hub words done")
 
     # Save
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
