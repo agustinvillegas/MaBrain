@@ -99,6 +99,8 @@ def build_traced_thought(brain, start_cell, steps=10, temperature=None, epsilon=
     If relation_filter is a set/list, only follow synapses with those relations.
     select_config: optional dict passed to _select_synapse (min_strength, min_usage, char_top_k)
     """
+    if start_cell is None:
+        return []
     current = start_cell
     result = []
     for _ in range(steps):
@@ -221,6 +223,15 @@ def generate(brain, start_word, steps=8, temperature=None, epsilon=0.0):
 def _format_strategy_response(path, start_word, strategy_config):
     """Wrap a linearized path in intent-appropriate response template."""
     if not path:
+        strategy = strategy_config.get("_strategy", "")
+        if strategy == "EXPLAIN_CAUSE":
+            return f"I don't know what causes {start_word}."
+        elif strategy == "EXPLAIN_FUNCTION":
+            return f"I don't know what {start_word} does."
+        elif strategy == "EXPLAIN_LOCATION":
+            return f"I don't know where {start_word} is."
+        elif strategy == "EXPLAIN_PROPERTY":
+            return f"I don't know what {start_word} is like."
         return f"I don't know what {start_word} is."
 
     base = linearize_path(path, start_word)
@@ -308,6 +319,15 @@ def strategy_generate(brain, start_word, strategy_config):
                                     steps=steps, temperature=temp,
                                     relation_filter=relations,
                                     select_config=select_config)
+
+        # Fallback: if filtered walk yields nothing, try exploratory (any relation)
+        if not path and relations:
+            path = build_traced_thought(brain,
+                                        brain.get_or_create_cell(start_word, fuzzy=True),
+                                        steps=steps, temperature=0.3,
+                                        relation_filter=None,
+                                        select_config=select_config)
+
         return _format_strategy_response(path, start_word, strategy_config)
     finally:
         brain.embedding_weight = old_ew

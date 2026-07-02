@@ -36,9 +36,9 @@ def load_dialogues(path):
     return dialogues
 
 
-def train_dialogues(brain, dialogues, epochs=3, checkpoint_base=None):
+def train_dialogues(brain, dialogues, epochs=3, checkpoint_base=None, reward=0.1):
     """Train brain on multi-turn dialogues."""
-    print(f"\n--- Training {len(dialogues)} dialogues ({epochs} epochs) ---")
+    print(f"\n--- Training {len(dialogues)} dialogues ({epochs} epochs, reward={reward}) ---")
     start = time.time()
     total_rewards = 0
 
@@ -86,8 +86,8 @@ def train_dialogues(brain, dialogues, epochs=3, checkpoint_base=None):
                 syn.inference_usage += 1
                 target_cell.activation += syn.strength
 
-                # 4. Reward (Hebbian strengthening with capping)
-                brain.reward_thought(1.0)
+                # 4. Reward (Hebbian strengthening)
+                brain.reward_thought(reward)
                 epoch_rewards += 1
 
                 # 5. Ingest bot response into WM for next turn's context
@@ -167,6 +167,8 @@ def main():
                         help="Training epochs over dialogues (default: 3)")
     parser.add_argument("--ctx-bias", type=float, default=None,
                         help="Override context_bias_weight (default: keep existing)")
+    parser.add_argument("--reward", type=float, default=0.1,
+                        help="Reward per dialogue turn (default: 0.1)")
     args = parser.parse_args()
 
     print("=" * 60)
@@ -189,7 +191,7 @@ def main():
     print(f"  Loaded {len(dialogues)} dialogues ({total_turns} turns)")
 
     # Train
-    train_dialogues(brain, dialogues, epochs=args.epochs, checkpoint_base=args.output)
+    train_dialogues(brain, dialogues, epochs=args.epochs, checkpoint_base=args.output, reward=args.reward)
 
     # Quick test
     print_dialogue_test(brain, dialogues)

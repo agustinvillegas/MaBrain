@@ -1,13 +1,16 @@
 """
-Generate conversational dialogues (Capa 4) from ConceptNet knowledge graph.
+Generate conversational dialogues (Capa 4) from Layer 1 triplets.
 Output: JSONL with multi-turn dialogues grounded in real entities + relations.
 
-Each dialogue is a list of turns:
-  {"user": "question string", "topic": "entity",
-   "expected": "target concept", "relation": "RELATION_TYPE"}
+Generates diverse question-answer pairs from the graph:
+  - Chain dialogues: walk consecutive steps (e.g. IS_A chain of 2-3 steps)
+  - Mixed dialogues: ask different relations for the same entity
+  - Single-turn dialogues: bulk reinforcement for coverage
 
 Usage:
-    python generate_dialogues.py --output data/processed/layer4_dialogues.jsonl
+    python generate_dialogues.py --layer1 data/processed/layer1_triplets.json
+                                 --output data/processed/layer4_dialogues.jsonl
+                                 --max 5000
 """
 import json
 import os
@@ -16,7 +19,6 @@ from collections import defaultdict
 
 random.seed(42)
 
-# ── Template patterns for each relation ─────────────────────────
 QUESTION_TEMPLATES = {
     "IS_A":        ["What is {e}?", "What kind of thing is {e}?", "Tell me about {e}."],
     "LOCATED_IN":  ["Where is {e} found?", "Where can I find {e}?", "Where is {e} located?"],
@@ -42,161 +44,167 @@ RESPONSE_TEMPLATES = {
 }
 
 
-def generate_dialogues(schemas_path, output_path, min_relation_types=2,
-                       turns_per_dialogue=4, max_dialogues=800,
-                       chain_proportion=0.4):
-    """Generate multi-turn dialogues grounded in schema entities.
+def load_json(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-    Generates two types:
-      - chain dialogues: walk consecutive steps in multi-step schemas (e.g. IS_A chain)
-      - mixed dialogues: ask about different relations for the same entity
-    """
-    with open(schemas_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
 
-    # ── Build entity connection map ─────────────────────────────
-    entity_conns = defaultdict(list)
-    chain_instances = []  # multi-step chains for chain dialogues
-    for schema in data.get("schemas", []):
-        rel_seq = schema.get("relation_sequence", [])
-        primary_rel = rel_seq[0] if rel_seq else "UNKNOWN"
-        for inst in schema.get("instances", []):
-            vals = inst[:]  # list [entity, class_1, class_2, ...]
-            if len(vals) >= 2:
-                entity_conns[vals[0]].append((vals[1], primary_rel))
-            # Collect multi-step chains (2+ steps) for dialogue chaining
-            if len(vals) >= 3 and primary_rel in ("IS_A", "LOCATED_IN", "PART_OF", "CAUSE"):
-                chain_instances.append((primary_rel, vals))
+def build_graph(triplets):
+    out_edges = defaultdict(list)
+    for t in triplets:
+        frm = t.get("from", "").strip()
+        to = t.get("to", "").strip()
+        rel = t.get("relation", "").strip()
+        if frm and to and rel:
+            out_edges[frm].append((to, rel))
+    return out_edges
 
-    # ── Single-entity mixed-relation candidates ─────────────────
-    candidates = []
-    for entity, conns in entity_conns.items():
-        rel_types = set(r for _, r in conns)
-        if len(rel_types) >= min_relation_types:
-            by_rel = defaultdict(list)
-            for t, r in conns:
-                by_rel[r].append(t)
-            candidates.append((entity, dict(by_rel)))
 
-    random.shuffle(candidates)
-    random.shuffle(chain_instances)
-    print(f"  Entities with >= {min_relation_types} rel-types: {len(candidates)}")
-    print(f"  Multi-step chain instances: {len(chain_instances)}")
+def find_chains(entity, out_edges, max_depth=3, max_chains=5000):
+    chains = []
+    visited = set()
+    queue = [(entity, [entity], [])]
+    while queue and len(chains) < max_chains:
+        current, path, rels = queue.pop(0)
+        if len(path) >= max_depth:
+            continue
+        for to, rel in out_edges.get(current, []):
+            if rel not in ("IS_A", "CAUSE", "LOCATED_IN", "PART_OF"):
+                continue
+            if to in visited:
+                continue
+            new_path = path + [to]
+            new_rels = rels + [rel]
+            chains.append((new_path, new_rels))
+            visited.add(to)
+            queue.append((to, new_path, new_rels))
+    return chains
+
+
+def generate_dialogues(triplets_path, output_path, max_dialogues=5000,
+                       turns_per_dialogue=3, chain_proportion=0.3):
+    data = load_json(triplets_path)
+    triplets = data.get("triplets", [])
+    print(f"Loaded {len(triplets)} triplets")
+
+    out_edges = build_graph(triplets)
+    print(f"Entities with outgoing edges: {len(out_edges)}")
+
+    entity_rel_types = defaultdict(set)
+    for t in triplets:
+        frm = t.get("from", "").strip()
+        rel = t.get("relation", "").strip()
+        if frm and rel:
+            entity_rel_types[frm].add(rel)
+
+    multi_rel_entities = [e for e, rels in entity_rel_types.items() if len(rels) >= 2]
+    random.shuffle(multi_rel_entities)
+    print(f"Entities with 2+ rel types: {len(multi_rel_entities)}")
+
+    all_entities = list(out_edges.keys())
+    random.shuffle(all_entities)
+    print(f"All entities with edges: {len(all_entities)}")
 
     dialogues = []
-    used_pairs = set()
 
-    # ── Type A: Chain dialogues (follow consecutive steps) ──────
+    # Type A: Chain dialogues
     n_chain = int(max_dialogues * chain_proportion)
-    for rel, vals in chain_instances:
+    for entity in all_entities:
         if len(dialogues) >= n_chain:
             break
-        # Build turns walking the chain: step 1, step 2, ...
-        turns = []
-        for i in range(len(vals) - 1):
-            entity = vals[i]
-            target = vals[i + 1]
-            pair_key = (entity, target, rel)
-            if pair_key in used_pairs:
-                continue
-            used_pairs.add(pair_key)
-
-            if i == 0:
-                q = random.choice(QUESTION_TEMPLATES.get(rel, ["What is {e}?"])).format(e=entity)
-            else:
-                q = random.choice([
-                    f"And what is {entity}?",
-                    f"What about {entity}?",
-                    f"Tell me about {entity}.",
-                ])
-            turns.append({
-                "user": q,
-                "topic": entity,
-                "expected": target,
-                "relation": rel,
-            })
-            if len(turns) >= 3:  # max 3 chain steps
+        chains = find_chains(entity, out_edges, max_depth=3, max_chains=3)
+        for path, rels in chains:
+            if len(path) < 2 or len(dialogues) >= n_chain:
                 break
-        if len(turns) >= 2:
-            dialogues.append({"turns": turns, "type": "chain"})
+            turns = []
+            for i in range(len(path) - 1):
+                src, tgt = path[i], path[i + 1]
+                rel = rels[i]
+                if i == 0:
+                    q = random.choice(QUESTION_TEMPLATES.get(rel, ["What is {e}?"])).format(e=src)
+                else:
+                    q = random.choice([
+                        f"And what is {src}?",
+                        f"What about {src}?",
+                        f"Tell me about {src}.",
+                    ])
+                turns.append({"user": q, "topic": src, "expected": tgt, "relation": rel})
+            if len(turns) >= 2:
+                dialogues.append({"turns": turns, "type": "chain"})
 
-    # ── Type B: Mixed-relation dialogues (different rels, same entity) ──
-    for entity, by_rel in candidates:
+    # Type B: Mixed-relation dialogues
+    for entity in multi_rel_entities:
         if len(dialogues) >= max_dialogues:
             break
-
-        rels = sorted(by_rel.keys())
+        rels = list(entity_rel_types[entity])
         random.shuffle(rels)
         selected_rels = rels[:turns_per_dialogue]
         if len(selected_rels) < 2:
             continue
-
         turns = []
         for rel in selected_rels:
-            targets = by_rel[rel]
-            target = random.choice(targets)
-            pair_key = (entity, target, rel)
-            if pair_key in used_pairs:
+            targets = [t for t, r in out_edges[entity] if r == rel]
+            if not targets:
                 continue
-            used_pairs.add(pair_key)
-
-            q_templates = QUESTION_TEMPLATES.get(rel, ["Tell me about {e}."])
-            question = random.choice(q_templates).format(e=entity)
-            turns.append({
-                "user": question,
-                "topic": entity,
-                "expected": target,
-                "relation": rel,
-            })
+            target = random.choice(targets)
+            q = random.choice(QUESTION_TEMPLATES.get(rel, ["Tell me about {e}."])).format(e=entity)
+            turns.append({"user": q, "topic": entity, "expected": target, "relation": rel})
         if len(turns) >= 2:
             dialogues.append({"turns": turns, "type": "mixed"})
 
-    # ── Save ────────────────────────────────────────────────────
+    # Type C: Single-turn dialogues (bulk)
+    for entity in all_entities:
+        if len(dialogues) >= max_dialogues:
+            break
+        for tgt, rel in out_edges[entity]:
+            q = random.choice(QUESTION_TEMPLATES.get(rel, ["Tell me about {e}?"])).format(e=entity)
+            turns = [{"user": q, "topic": entity, "expected": tgt, "relation": rel}]
+            dialogues.append({"turns": turns, "type": "single"})
+            if len(dialogues) >= max_dialogues:
+                break
+
+    # Save
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         for d in dialogues:
             f.write(json.dumps(d, ensure_ascii=False) + "\n")
 
-    print(f"\n  Generated {len(dialogues)} dialogues ({sum(1 for d in dialogues if d.get('type')=='chain')} chain, {sum(1 for d in dialogues if d.get('type')=='mixed')} mixed)")
+    types = defaultdict(int)
+    for d in dialogues:
+        types[d.get("type", "unknown")] += 1
+    print(f"\nGenerated {len(dialogues)} dialogues: {dict(types)}")
     total_turns = sum(len(d["turns"]) for d in dialogues)
-    print(f"  Total turns: {total_turns}")
-    print(f"  Saved: {output_path}")
+    print(f"Total turns: {total_turns}")
 
-    # ── Sample ──────────────────────────────────────────────────
     if dialogues:
-        sample = dialogues[0]
-        print(f"\n  Sample dialogue ({sample.get('type')}):")
-        for i, turn in enumerate(sample["turns"]):
-            resp = RESPONSE_TEMPLATES.get(turn["relation"], "{E} -> {t}")
-            response_text = resp.format(E=turn["topic"].capitalize(),
-                                        e=turn["topic"], t=turn["expected"])
-            print(f"    [{i+1}] User: {turn['user']}")
-            print(f"           Bot: {response_text}")
+        sample = [d for d in dialogues if d.get("type") != "single"]
+        if sample:
+            print(f"\nSample ({sample[0]['type']}):")
+            for turn in sample[0]["turns"]:
+                resp = RESPONSE_TEMPLATES.get(turn["relation"], "{E} -> {t}")
+                text = resp.format(E=turn["topic"].capitalize(), e=turn["topic"], t=turn["expected"])
+                print(f"  User: {turn['user']}")
+                print(f"  Bot:  {text}")
 
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Generate conversational dialogues (Capa 4)")
-    parser.add_argument("--layer3", default="data/processed/layer3_schemas.json",
-                        help="Capa 3 schemas JSON")
+    parser = argparse.ArgumentParser(description="Generate dialogues from triplets")
+    parser.add_argument("--layer1", default="data/processed/layer1_triplets_curated.json",
+                        help="Layer 1 triplets JSON (curated)")
     parser.add_argument("--output", "-o", default="data/processed/layer4_dialogues.jsonl",
                         help="Output dialogues JSONL")
-    parser.add_argument("--min-rels", type=int, default=2,
-                        help="Minimum relation types per entity (default: 2)")
-    parser.add_argument("--turns", type=int, default=4,
-                        help="Turns per dialogue")
-    parser.add_argument("--max", type=int, default=800,
-                        help="Max dialogues (default: 800)")
-    parser.add_argument("--chain-prop", type=float, default=0.4,
-                        help="Proportion of chain dialogues (default: 0.4)")
+    parser.add_argument("--max", type=int, default=5000,
+                        help="Max dialogues (default: 5000)")
+    parser.add_argument("--turns", type=int, default=3,
+                        help="Turns per mixed dialogue (default: 3)")
+    parser.add_argument("--chain-prop", type=float, default=0.3,
+                        help="Proportion chain dialogues (default: 0.3)")
     args = parser.parse_args()
 
-    print("=== Generate Dialogues (Capa 4) ===\n")
-    generate_dialogues(
-        args.layer3, args.output,
-        min_relation_types=args.min_rels,
-        turns_per_dialogue=args.turns,
-        max_dialogues=args.max,
-        chain_proportion=args.chain_prop,
-    )
+    print("=== Generate Dialogues v2 (from triplets) ===\n")
+    generate_dialogues(args.layer1, args.output,
+                       max_dialogues=args.max,
+                       turns_per_dialogue=args.turns,
+                       chain_proportion=args.chain_prop)
     print("\nDone.")

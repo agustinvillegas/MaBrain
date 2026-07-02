@@ -55,7 +55,7 @@ class Brain:
 
 
     def __init__(self, embedding_bridge=None, embedding_weight=0.0, structural_weight=0.0,
-                 context_bias_weight=0.0, max_strength=50.0):
+                 context_bias_weight=0.0, max_strength=5.0):
 
         self.cells = {}
         self.synapses = {}
@@ -69,7 +69,7 @@ class Brain:
         self.MAX_STRENGTH = max_strength
 
 
-    def _resolve_concept(self, concept, min_score=0.1):
+    def _resolve_concept(self, concept, min_score=0.25):
 
         cell_id = self.concept_registry.get(concept)
         if cell_id:
@@ -78,9 +78,12 @@ class Brain:
         match = self.embedding_bridge.closest_cell_word(concept, self, min_score=min_score)
         if match:
             matched_concept, score = match
-            if self.embedding_bridge.model_loaded or score >= 0.1:
-                return self.concept_registry.get(matched_concept)
-
+            if self.embedding_bridge.model_loaded or score >= min_score:
+                matched_id = self.concept_registry.get(matched_concept)
+                if matched_id:
+                    matched_cell = self.cells.get(matched_id)
+                    if matched_cell and matched_cell.synapses_out:
+                        return matched_id
         return None
 
 
@@ -103,6 +106,7 @@ class Brain:
             match_id = self._resolve_concept(concept)
             if match_id:
                 return self.cells[match_id]
+            return None
 
         cell = Braincell(word=concept)
         self.cells[cell.id] = cell
@@ -121,7 +125,11 @@ class Brain:
                 gain = syn.activation_trace * score
 
                 syn.reward += gain
-                syn.strength = min(syn.strength + gain * 0.1, self.MAX_STRENGTH)
+                new_strength = syn.strength + gain * 0.1
+                if self.MAX_STRENGTH > 0:
+                    syn.strength = min(new_strength, self.MAX_STRENGTH)
+                else:
+                    syn.strength = new_strength
 
             # abarata caminos útiles
                 syn.cost *= (1 - min(gain * 0.01, 0.1))
@@ -738,13 +746,15 @@ class Brain:
 
             "thoughts": self.thoughts,
 
-            "working_memory": self.wm.to_dict(),
+            "working_memory": {},  # don't persist WM stale state
 
             "embedding_weight": self.embedding_weight,
 
             "structural_weight": self.structural_weight,
 
             "context_bias_weight": self.context_bias_weight,
+
+            "max_strength": self.MAX_STRENGTH,
 
         }
 
@@ -861,3 +871,4 @@ class Brain:
         self.embedding_weight = data.get("embedding_weight", self.embedding_weight)
         self.structural_weight = data.get("structural_weight", self.structural_weight)
         self.context_bias_weight = data.get("context_bias_weight", self.context_bias_weight)
+        self.MAX_STRENGTH = data.get("max_strength", self.MAX_STRENGTH)

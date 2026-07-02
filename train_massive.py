@@ -271,12 +271,14 @@ def main():
     parser.add_argument("--layer3", default=None, help="Capa 3 schemas JSON (optional)")
     parser.add_argument("--output", "-o", default="data/brain_states/brain_massive_v1.json",
                         help="Output brain state path")
-    parser.add_argument("--epochs", type=int, default=3,
-                        help="Training epochs over Capa 2 (default: 3)")
+    parser.add_argument("--epochs", type=int, default=25,
+                        help="Training epochs over Capa 2 (default: 25)")
     parser.add_argument("--min-usage", type=int, default=2,
                         help="Min synapse usage to survive pruning (default: 2)")
-    parser.add_argument("--context-bias", type=float, default=0.2,
-                        help="Default context_bias_weight for trained brain (default: 0.2)")
+    parser.add_argument("--context-bias", type=float, default=0.3,
+                        help="Default context_bias_weight for trained brain (default: 0.3)")
+    parser.add_argument("--max-strength", type=float, default=5.0,
+                        help="Max synapse strength cap (0=no cap, default: 5.0)")
     args = parser.parse_args()
 
     print("=" * 60)
@@ -284,7 +286,7 @@ def main():
     print("=" * 60)
 
     # Initialize brain
-    brain = Brain(context_bias_weight=args.context_bias)
+    brain = Brain(context_bias_weight=args.context_bias, max_strength=args.max_strength)
     total_start = time.time()
 
     # FASE 1: Layer 1
@@ -305,24 +307,34 @@ def main():
     else:
         print("\n  --- FASE 3: Skipped (no Layer 3 provided) ---")
 
-    # FASE 4: Prune + Consolidate
-    consolidate(brain, min_usage=args.min_usage)
+    # FASE 4: Normalize costs (skip pruning — keep full graph)
+    print("\n--- FASE 4: Cost normalization ---")
+    if brain.synapses:
+        total_cost = sum(s.cost for s in brain.synapses.values())
+        avg_cost = total_cost / max(len(brain.synapses), 1)
+        print(f"  Avg cost (before): {avg_cost:.4f}")
+        if avg_cost > 0:
+            for s in brain.synapses.values():
+                s.cost = s.cost / avg_cost
 
-    # ── Final semantic bootstrap (top hubs only) ──
-    print("\n  Running final semantic bootstrap...")
+    # ── Final semantic bootstrap — only for untrained edges ──
+    print("  Running final semantic bootstrap (untrained edges only)...")
     word_degree = {}
     for syn in brain.synapses.values():
         for w in (syn.origin.word, syn.target.word):
             if w: word_degree[w] = word_degree.get(w, 0) + 1
     top_words = sorted(word_degree, key=lambda w: -word_degree[w])[:5000]
     top_set = set(top_words)
+    n_boostrapped = 0
     if top_words:
         brain.embedding_bridge.encode(top_words)
         for syn in brain.synapses.values():
             if syn.origin.word in top_set and syn.target.word in top_set:
-                sim = brain.embedding_bridge.similarity(syn.origin.word, syn.target.word)
-                syn.strength = 1.0 + 0.5 * max(sim, 0.0)
-    print(f"  Final bootstrap: {len(top_words)} hub words done")
+                if syn.inference_usage == 0:  # never used in training
+                    sim = brain.embedding_bridge.similarity(syn.origin.word, syn.target.word)
+                    syn.strength = 1.0 + 0.5 * max(sim, 0.0)
+                    n_boostrapped += 1
+    print(f"  Final bootstrap: {n_boostrapped} untrained edges done")
 
     # Save
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)

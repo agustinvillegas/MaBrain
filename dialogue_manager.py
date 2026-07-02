@@ -77,11 +77,11 @@ STRATEGY_MAP = {
 #   use_analogy: use analogy method instead of walk
 #   template: use a hardcoded template
 STRATEGY_CONFIG = {
-    "EXPLAIN_IS_A":     {"temp": 0.1, "ew": 0.3, "steps": 2, "relations": {"IS_A"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10, "min_sim": 0.3},
-    "EXPLAIN_FUNCTION": {"temp": 0.2, "ew": 0.3, "steps": 2, "relations": {"FUNCTION", "USED_FOR"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10, "min_sim": 0.0},
-    "EXPLAIN_PROPERTY": {"temp": 0.1, "ew": 0.3, "steps": 2, "relations": {"HAS_PROPERTY"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10, "min_sim": 0.0},
-    "EXPLAIN_LOCATION": {"temp": 0.1, "ew": 0.3, "steps": 2, "relations": {"LOCATED_IN"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10, "min_sim": 0.0},
-    "EXPLAIN_CAUSE":    {"temp": 0.2, "ew": 0.3, "steps": 2, "relations": {"CAUSE"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10, "min_sim": 0.0},
+    "EXPLAIN_IS_A":     {"temp": 0.0, "ew": 0.3, "steps": 2, "relations": {"IS_A"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10, "min_sim": 0.3},
+    "EXPLAIN_FUNCTION": {"temp": 0.0, "ew": 0.3, "steps": 2, "relations": {"FUNCTION", "USED_FOR"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10, "min_sim": 0.0},
+    "EXPLAIN_PROPERTY": {"temp": 0.0, "ew": 0.3, "steps": 2, "relations": {"HAS_PROPERTY"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10, "min_sim": 0.0},
+    "EXPLAIN_LOCATION": {"temp": 0.0, "ew": 0.3, "steps": 2, "relations": {"LOCATED_IN"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10, "min_sim": 0.0},
+    "EXPLAIN_CAUSE":    {"temp": 0.0, "ew": 0.3, "steps": 2, "relations": {"CAUSE"}, "use_analogy": False, "template": None, "min_strength": 1.0, "min_usage": 0, "char_top_k": 10, "min_sim": 0.15},
     "ANALOGY_SEARCH":   {"temp": 0.0, "ew": 0.0, "steps": 0, "relations": None, "use_analogy": True, "template": None, "min_strength": 0.0, "min_usage": 0, "char_top_k": 0},
     "CONTINUE_TOPIC":   {"temp": 0.3, "ew": 0.1, "steps": 8, "relations": None, "use_analogy": False, "template": None, "ctx_bias": 0.3, "min_strength": 0.0, "min_usage": 0, "char_top_k": 10},
     "GREET":            {"temp": 0.0, "ew": 0.0, "steps": 0, "relations": None, "use_analogy": False, "template": "hello", "min_strength": 0.0, "min_usage": 0, "char_top_k": 0},
@@ -220,6 +220,12 @@ class DialogueManager:
 
         # 3. Determine start word: intent entity > first extracted entity > WM active
         start_word = intent_entity
+        # If intent_entity is not resolvable but extracted entity is, use extracted
+        if start_word and start_word not in self.brain.concept_registry:
+            fuzzy = self.brain.get_or_create_cell(start_word, fuzzy=True)
+            if not fuzzy or not fuzzy.word:
+                if entities and entities[0] in self.brain.concept_registry:
+                    start_word = entities[0]
         if not start_word and entities:
             start_word = entities[0]
         if not start_word:

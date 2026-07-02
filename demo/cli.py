@@ -4,6 +4,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from braincell import Brain
+from working_memory import WorkingMemory
 
 
 def print_banner():
@@ -343,9 +344,10 @@ def cmd_wm(brain, args):
 def main():
 
     brain = Brain(context_bias_weight=0.3)
-    loaded_path = "data/brain_states/brain_massive_v1.json"
+    loaded_path = "data/brain_states/brain_curated_v4.json"
     if os.path.exists(loaded_path):
         brain.load(loaded_path)
+        brain.wm = WorkingMemory()  # fresh WM, don't persist stale entities
         print(f"Cargado: {len(brain.cells)} neuronas, {len(brain.synapses)} sinapsis")
         n_rels = sum(1 for s in brain.synapses.values() if s.relation)
         if n_rels == 0:
